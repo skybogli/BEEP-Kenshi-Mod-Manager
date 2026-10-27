@@ -5,12 +5,40 @@
 > **Enhanced Edition** — a fork of [BEEP Kenshi Mod Manager](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) by Derthi (MIT License),
 > modified by skybogli: convenience features (mod list viewer, list share strings, selection and panel tweaks)
 > and a built-in translation / patch tool. Original work © 2026 Derthi, modifications © 2026 skybogli — see [LICENSE](LICENSE).
+>
+> This is an **unofficial** fork, not affiliated with or supported by Derthi. Please report problems with this edition
+> [here](https://github.com/skybogli/BEEP-Kenshi-Mod-Manager/issues), not to the original project.
 
 A Electron-based mod load order manager for [Kenshi](https://store.steampowered.com/app/233860/Kenshi/). Works with both **Steam** and **GOG** installations. Organize your mods into categories, detect conflicts at every level, visualize them on the world map, and get AI-assisted sorting suggestions.
 
-[Steam Workshop Guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622)
+Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) · [Steam Workshop Guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622) · [Discord](https://discord.gg/QvFTmRKHSz) (for the original version)
 
-[Discord](https://discord.gg/QvFTmRKHSz)
+## Enhanced Edition features
+
+### Mod list viewer (Ctrl+Shift+O)
+- Open an exported mod list in a **separate window** (same size as the main window, up to 4 at once) without touching your current setup.
+- **View mode** shows the list as it is; **Edit mode** lets you turn mods on/off, move them, and add, rename or delete categories.
+- **Addable owned mods** panel (left, folded by default): mods you have that the list doesn't, ready to drag in.
+- Missing mods can be subscribed to on the Workshop; the list can be **imported into the main screen** or exported again (file or string, saved as `<name>_사본 01` etc.).
+- Ctrl+M / Ctrl+Shift+M / F11 for the window; unsaved changes are asked about on close.
+
+### Mod list share strings
+- **Advanced export → String**: the whole list (categories, order, on/off) as one short `BEEP1:` string — copy it to the clipboard or save it as txt.
+- **Import ▾ → Import from string… (Ctrl+I)**: paste a string or open a txt that holds one, then import it into the main screen or open it in the mod list viewer.
+- Strings from the other mod managers (`DODO1:` ARK, `BITER1:` Factorio) are recognised and named instead of misread.
+
+### Translation / patch tool (KMT)
+- A built-in port of KMT, a Kenshi FCS (`.mod`) translation tool: parses `.mod` records and translates the text fields.
+- Glossary first (`source = translation`; a source containing `=` is written `source =|= translation`), the mod's own `main.po` reused, the rest by Google Translate (with rate-limit waits and a cache).
+- Save as a **separate patch mod** (original untouched), **edit the original** (backed up), or make a **patch file** of chosen fields.
+- **Extract** strings that need translation into a glossary file (dialogue grouped by PACKAGE > DIALOGUE > LINE) to translate elsewhere.
+- **Review window**: check and edit translations line by line, add them to the glossary; recent files on the left, older ones grouped by mod, search.
+- Target language follows the app language and can be changed in its settings; Korean / English UI.
+
+### Editing tweaks
+- Explorer-style Shift / Ctrl selection; selections in other categories are kept.
+- Fold buttons on the panel resize bars; moving a category with the keyboard scrolls it into view.
+- Import ▾ menu: Import list (Ctrl+O), Import from string (Ctrl+I), Mod list viewer (Ctrl+Shift+O).
 
 ## Features
 
@@ -103,18 +131,21 @@ A Electron-based mod load order manager for [Kenshi](https://store.steampowered.
 - Export writes `name|active` and, for a second copy, `|source:folder` (older versions ignore it); import puts each copy back.
 - Alt+M / Help → Steam Workshop opens the Workshop in the browser.
 
+## Installation
+
 ### From release (recommended)
 
-1. Download the latest release from the [Releases](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager/releases) page.
+1. Download the latest release from the [Releases](https://github.com/skybogli/BEEP-Kenshi-Mod-Manager/releases) page.
 2. Extract anywhere.
 3. Run `BEEP Kenshi Mod Manager.exe`.
 
 Works with both **Steam** and **GOG** versions of Kenshi. Windows 64-bit only.
+The app is not code-signed, so Windows SmartScreen may warn on first launch: **More info → Run anyway**.
 
 ### From source
 
 ```bash
-git clone https://github.com/Derthi/BEEP-Kenshi-Mod-Manager.git
+git clone https://github.com/skybogli/BEEP-Kenshi-Mod-Manager.git
 cd BEEP-Kenshi-Mod-Manager
 npm install
 npm start
@@ -123,10 +154,12 @@ npm start
 ### Build
 
 ```bash
-npm run build
+python tools/build.py
 ```
 
-Output is in `dist/win-unpacked/`.
+Needs Python 3 only (no Node). It copies the Electron runtime from the newest `BEEP-Kenshi-Mod-Manager-v*-win64` folder next to `Source Code`,
+packs this source into `resources/app.asar`, and writes `BEEP-Kenshi-Mod-Manager-v<version>-win64` (plus a source copy in `Source Code`).
+Bump `version` in `package.json` first — an existing output folder is never overwritten.
 
 ## How it works
 
@@ -148,4 +181,4 @@ Output is in `dist/win-unpacked/`.
 
 ## License
 
-[MIT](LICENSE)
+[MIT](LICENSE) — original work © 2026 Derthi, modifications © 2026 skybogli.
