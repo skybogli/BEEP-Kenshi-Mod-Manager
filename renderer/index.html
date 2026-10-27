@@ -246,6 +246,7 @@
           <div class="tutorial-guide">
             <h4 data-i18n="tutorial.gettingStarted">Getting Started</h4>
             <p data-i18n="tutorial.gettingStartedText">BEEP helps you organize your Kenshi mods into categories displayed as columns. Load order reads left-to-right, top-to-bottom. Your existing mods.cfg load order is preserved on first launch.</p>
+            <p class="tutorial-lang-note" data-i18n-html="tutorial.langNote"></p>
 
             <hr class="tutorial-divider">
 
@@ -254,8 +255,11 @@
               <li data-i18n-html="tutorial.sorting.1"><strong>Drag and drop</strong> mods between category columns to sort your load order.</li>
               <li data-i18n-html="tutorial.sorting.2"><strong>Multi-select</strong> with Ctrl+click (toggle) or Shift+click (range), then right-click to move them all to a category at once.</li>
               <li data-i18n-html="tutorial.sorting.3"><strong>Group drag</strong> — select multiple mods and drag them together.</li>
-              <li data-i18n-html="tutorial.sorting.4"><strong>Pin Uncategorized</strong> to get a resizable side panel for easy sorting.</li>
+              <li data-i18n-html="tutorial.sorting.4"><strong>Uncategorized</strong> is a normal column (on the left by default) — move it like any other category.</li>
               <li data-i18n-html="tutorial.sorting.5"><strong>Drag column headers</strong> to reorder entire categories.</li>
+              <li data-i18n-html="tutorial.sorting.6"><strong>Actual load order panel</strong> (left) — the mods that are on, in the order Kenshi loads them. Drop a mod there to put it at that position: it gets a 📌 pin. Right-click to pin / unpin; ⟲ above the panel unpins all.</li>
+              <li data-i18n-html="tutorial.sorting.7"><strong>Fold buttons</strong> on the bars between the panels fold and unfold the side panels.</li>
+              <li data-i18n-html="tutorial.sorting.8"><strong>Keyboard</strong> — Ctrl+X / Ctrl+V move, Shift+↑/↓ one step, Shift+←/→ previous / next category, Ctrl+Shift+↑/↓ top / bottom, F8 / Shift+F8 next / previous mod with a problem, Ctrl+Z undo, Ctrl+S save (the view follows the moved category). All keys: File → Shortcut Keys….</li>
             </ul>
 
             <hr class="tutorial-divider">
@@ -266,6 +270,7 @@
               <li data-i18n-html="tutorial.categories.2"><strong>Right-click a category header</strong> to rename, change color, or delete it.</li>
               <li data-i18n-html="tutorial.categories.3"><strong>Drag category headers</strong> left/right to reorder them. Load order follows category order.</li>
               <li data-i18n-html="tutorial.categories.4"><strong>Reset Categories</strong> restores the default category set.</li>
+              <li data-i18n-html="tutorial.categories.5"><strong>⚙ Settings</strong> (Ctrl+,) — the category layout (Workshop tags, BEEP defaults or your own list), sort rules, category width, scroll speed and the Kenshi folders.</li>
             </ul>
 
             <hr class="tutorial-divider">
@@ -285,6 +290,30 @@
               <li data-i18n-html="tutorial.importExport.1"><strong>Export List</strong> — saves your full setup (categories, load order, active/inactive state) to a text file. Share it with friends or back it up.</li>
               <li data-i18n-html="tutorial.importExport.2"><strong>Import List</strong> — loads a previously exported BEEP mod list, restoring all categories and ordering.</li>
               <li data-i18n-html="tutorial.importExport.3"><strong>Generic import</strong> — also supports plain lists of .mod filenames (one per line). These reorder your uncategorized mods to match the list.</li>
+              <li data-i18n-html="tutorial.importExport.4"><strong>Share as a string</strong> — in Advanced Export… (Ctrl+Shift+E) pick the format <strong>String</strong>: the whole list becomes one line starting with <code>BEEP1:</code>. Copy it to the clipboard or save it as txt. The other side pastes it (or opens the txt) in Import from String… and imports it into the main screen or opens it in the viewer.</li>
+            </ul>
+
+            <hr class="tutorial-divider">
+
+            <h4 data-i18n="tutorial.viewerTitle">Mod List Viewer</h4>
+            <ul>
+              <li data-i18n-html="tutorial.viewer.1"><strong>Mod List Viewer…</strong> (Ctrl+Shift+O, also in Import ▾) opens an exported list or string in its own window. Your current setup isn't touched; up to 4 windows at once.</li>
+              <li data-i18n-html="tutorial.viewer.2"><strong>View</strong> mode only shows the list; <strong>Edit</strong> mode lets you turn mods on / off, move them, and add, rename or delete categories.</li>
+              <li data-i18n-html="tutorial.viewer.3"><strong>Addable owned mods</strong> (left, folded at first) — mods you have that the list doesn't; drag them in.</li>
+              <li data-i18n-html="tutorial.viewer.4">Mods you don't have can be subscribed to on the Workshop. <strong>Import to main screen</strong> applies the list; <strong>Export ▾</strong> saves it again as a file or string (named <code>…_사본 01</code> and so on).</li>
+              <li data-i18n-html="tutorial.viewer.5">Ctrl+M minimize, Ctrl+Shift+M maximize / restore, F11 full screen. Unsaved changes are asked about when you close it.</li>
+            </ul>
+
+            <hr class="tutorial-divider">
+
+            <h4 data-i18n="tutorial.translatorTitle">Translate / Patch Tool</h4>
+            <ul>
+              <li data-i18n-html="tutorial.translator.1">Open it with <strong>Ctrl+T</strong>, File → Translate / Patch Tool…, or right-click mods → Open in the Translate / Patch Tool…. It runs in its own window; Ctrl+T / Esc put it down again.</li>
+              <li data-i18n-html="tutorial.translator.2">It reads the text in <code>.mod</code> files and translates it: your <strong>glossary</strong> first, then a translation the mod already has (<code>main.po</code>), the rest by Google Translate (with waits and a cache, so a stopped job goes on where it left off).</li>
+              <li data-i18n-html="tutorial.translator.3">Three ways to save: a <strong>separate patch mod</strong> (<code>_KO</code>, the original untouched), <strong>editing the original</strong> (backed up first), or a <strong>field-copy patch</strong> (<code>_Patch</code>). Right-clicking mods also offers the patch mod and the field-copy patch directly.</li>
+              <li data-i18n-html="tutorial.translator.4"><strong>Extract</strong> writes the text that needs translating into a glossary file (<code>source =</code>, dialogue grouped by PACKAGE › DIALOGUE › LINE) to fill in elsewhere. A source with <code>=</code> in it is written <code>source =|= translation</code>.</li>
+              <li data-i18n-html="tutorial.translator.5"><strong>Translation review</strong> — check and fix translations line by line and add them to the glossary. The newest 5 files are on the left; older ones are grouped by mod, with a search.</li>
+              <li data-i18n-html="tutorial.translator.6">Finished mods show <code>[Done] name date time [KO] [Bak] [Patch] [Glo]</code>: click one to open the file (a <code>.mod</code> opens in FCS). The target language follows the app language and can be changed in the tool's ⚙ Settings.</li>
             </ul>
 
             <hr class="tutorial-divider">
@@ -585,9 +614,12 @@ Test.mod</pre>
             <li data-i18n-html="tutorial.overview.conflicts"><strong>Deep conflict detection</strong> — detects data, asset, and level conflicts with actual values shown inline</li>
             <li data-i18n-html="tutorial.overview.conflictMap"><strong>Conflict map</strong> — interactive Kenshi world map showing exterior and interior conflict zones</li>
             <li data-i18n-html="tutorial.overview.aiSort"><strong>AI sorting</strong> — export your mod list, let AI suggest an order, then import it</li>
-            <li data-i18n-html="tutorial.overview.pinUncat"><strong>Pin Uncategorized</strong> — pin uncategorized mods for easy drag-and-drop sorting</li>
+            <li data-i18n-html="tutorial.overview.pinUncat"><strong>Actual load order</strong> — a panel with the mods that are on, in the order Kenshi loads them; 📌 pin a mod at its position</li>
             <li data-i18n-html="tutorial.overview.themes"><strong>Kenshi theme</strong> — toggle between Dark and Kenshi themes in the toolbar</li>
             <li data-i18n-html="tutorial.overview.packs"><strong>Mod Packs</strong> — save and load complete mod configurations</li>
+            <li data-i18n-html="tutorial.overview.viewer"><strong>Mod list viewer</strong> — open a shared list in its own window, look it over or edit it, then import it</li>
+            <li data-i18n-html="tutorial.overview.share"><strong>Share strings</strong> — your whole list as one <code>BEEP1:</code> line to paste anywhere</li>
+            <li data-i18n-html="tutorial.overview.translator"><strong>Translate / patch tool</strong> — translate mods with a glossary and Google, make patch mods, review the results</li>
           </ul>
         </div>
         <div class="tutorial-footer">

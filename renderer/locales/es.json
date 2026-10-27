@@ -279,14 +279,14 @@
   "tutorial.overview.conflicts": "<strong>Detección profunda de conflictos</strong> — detecta conflictos de datos, recursos y niveles mostrando valores reales en línea",
   "tutorial.overview.conflictMap": "<strong>Mapa de conflictos</strong> — mapa interactivo del mundo de Kenshi mostrando zonas de conflicto exteriores e interiores",
   "tutorial.overview.aiSort": "<strong>Ordenamiento con IA</strong> — exporta tu lista de mods, deja que la IA sugiera un orden y luego impórtalo",
-  "tutorial.overview.pinUncat": "<strong>Fijar Sin categoría</strong> — fija los mods sin categoría para ordenarlos fácilmente con arrastrar y soltar",
+  "tutorial.overview.pinUncat": "<strong>Orden de carga real</strong> — un panel con los mods activos en el orden en que Kenshi los carga; 📌 fija un mod en su posición",
   "tutorial.overview.themes": "<strong>Tema Kenshi</strong> — alterna entre los temas Oscuro y Kenshi en la barra de herramientas",
   "tutorial.overview.packs": "<strong>Paquetes de mods</strong> — guarda y carga configuraciones completas de mods",
 
   "tutorial.sorting.1": "<strong>Arrastra y suelta</strong> mods entre columnas de categorías para ordenar tu carga.",
   "tutorial.sorting.2": "<strong>Selección múltiple</strong> con Ctrl+clic (alternar) o Shift+clic (rango), luego haz clic derecho para moverlos todos a una categoría a la vez.",
   "tutorial.sorting.3": "<strong>Arrastre en grupo</strong> — selecciona varios mods y arrástralos juntos.",
-  "tutorial.sorting.4": "<strong>Fija Sin categoría</strong> para obtener un panel lateral redimensionable que facilita el ordenamiento.",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong> es una columna normal (a la izquierda por defecto) y se puede mover como cualquier otra categoría.",
   "tutorial.sorting.5": "<strong>Arrastra los encabezados de columna</strong> para reordenar categorías enteras.",
 
   "tutorial.categories.1": "<strong>Añade categorías</strong> con el botón «+ Añadir categoría» en la barra de herramientas.",
@@ -327,6 +327,10 @@
   "tutorial.aiExport.4": "<strong>Todos los mods Completo</strong> — descripciones completas (más preciso, más grande)",
   "tutorial.aiExport.5": "<strong>Dividir en lotes</strong> — múltiples archivos con ~50 mods cada uno",
   "tutorial.aiExport.formatNote": "Los comentarios adicionales están bien — el analizador elimina todo lo que no sea un encabezado de [Categoría] o un nombre de archivo .mod.",
+  "tutorial.langNote": "Las nuevas funciones de la Enhanced Edition (visor de listas de mods, cadenas para compartir, herramienta de traducción/parches, etc.) se describen por ahora en inglés en este tutorial. La traducción llegará en una próxima actualización.",
+  "tutorial.overview.viewer": "<strong>Visor de listas de mods</strong> — abre una lista compartida en su propia ventana, revísala o edítala y luego impórtala",
+  "tutorial.overview.share": "<strong>Cadenas para compartir</strong> — toda tu lista en una sola línea <code>BEEP1:</code> para pegarla donde quieras",
+  "tutorial.overview.translator": "<strong>Herramienta de traducción/parches</strong> — traduce mods con un glosario y Google, crea mods de parche y revisa los resultados",
 
   "aiExport.uncatDesc": "Solo obtiene descripciones para los mods en Sin categoría. Los mods ya ordenados se listan solo por nombre de archivo. Archivo mucho más pequeño, procesamiento de IA más rápido, menor costo.",
   "aiExport.uncatCompactDesc": "Solo mods sin ordenar, usando etiquetas + descripciones truncadas. Los mods ya ordenados se listan por nombre de archivo. Mejor equilibrio entre precisión y tamaño.",

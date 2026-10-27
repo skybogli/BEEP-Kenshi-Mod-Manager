@@ -279,14 +279,14 @@
   "tutorial.overview.conflicts": "<strong>Derin çakışma algılama</strong> — gerçek değerleri satır içi gösteren veri, varlık ve seviye çakışmalarını algılar",
   "tutorial.overview.conflictMap": "<strong>Çakışma haritası</strong> — dış ve iç mekan çakışma bölgelerini gösteren etkileşimli Kenshi dünya haritası",
   "tutorial.overview.aiSort": "<strong>Yapay zeka sıralama</strong> — mod listenizi dışa aktarın, yapay zekanın bir sıralama önermesini sağlayın, ardından içe aktarın",
-  "tutorial.overview.pinUncat": "<strong>Kategorisizleri Sabitle</strong> — kolay sürükle-bırak sıralaması için kategorisiz modları sabitleyin",
+  "tutorial.overview.pinUncat": "<strong>Gerçek yükleme sırası</strong> — açık modları Kenshi'nin yüklediği sırayla gösteren panel; 📌 bir modu konumuna sabitler",
   "tutorial.overview.themes": "<strong>Kenshi teması</strong> — araç çubuğundan Koyu ve Kenshi temaları arasında geçiş yapın",
   "tutorial.overview.packs": "<strong>Mod Paketleri</strong> — eksiksiz mod yapılandırmalarını kaydedin ve yükleyin",
 
   "tutorial.sorting.1": "<strong>Sürükle ve bırak</strong> ile modları kategori sütunları arasında taşıyarak yükleme sıranızı belirleyin.",
   "tutorial.sorting.2": "<strong>Çoklu seçim</strong> için Ctrl+tıklama (tek tek) veya Shift+tıklama (aralık) yapın, ardından sağ tıklayarak hepsini bir kategoriye taşıyın.",
   "tutorial.sorting.3": "<strong>Toplu sürükleme</strong> — birden fazla mod seçip birlikte sürükleyin.",
-  "tutorial.sorting.4": "<strong>Kategorisizleri Sabitle</strong> ile kolay sıralama için yeniden boyutlandırılabilir bir yan panel açın.",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong> (kategorisiz) normal bir sütundur (varsayılan olarak solda) ve diğer kategoriler gibi taşınabilir.",
   "tutorial.sorting.5": "<strong>Sütun başlıklarını sürükleyerek</strong> tüm kategorileri yeniden sıralayın.",
 
   "tutorial.categories.1": "<strong>Kategori eklemek</strong> için araç çubuğundaki \"+ Kategori Ekle\" düğmesine tıklayın.",
@@ -327,6 +327,10 @@
   "tutorial.aiExport.4": "<strong>Tüm Modlar Tam</strong> — eksiksiz açıklamalar (en doğru, en büyük)",
   "tutorial.aiExport.5": "<strong>Gruplara Böl</strong> — her biri yaklaşık 50 mod içeren birden fazla dosya",
   "tutorial.aiExport.formatNote": "Ekstra yorumlar sorun değil — ayrıştırıcı, [Kategori] başlığı veya .mod dosya adı olmayan her şeyi atar.",
+  "tutorial.langNote": "Enhanced Edition'ın yeni özellikleri (mod listesi görüntüleyici, paylaşım dizeleri, çeviri/yama aracı vb.) bu eğitimde şimdilik İngilizce anlatılıyor. Çeviri ileriki bir güncellemede gelecek.",
+  "tutorial.overview.viewer": "<strong>Mod listesi görüntüleyici</strong> — paylaşılan bir listeyi kendi penceresinde açın, inceleyin veya düzenleyin, sonra içe aktarın",
+  "tutorial.overview.share": "<strong>Paylaşım dizeleri</strong> — tüm listeniz, her yere yapıştırabileceğiniz tek bir <code>BEEP1:</code> satırı olarak",
+  "tutorial.overview.translator": "<strong>Çeviri/yama aracı</strong> — modları sözlük ve Google ile çevirin, yama modları oluşturun, sonuçları gözden geçirin",
 
   "aiExport.uncatDesc": "Yalnızca Kategorisiz bölümündeki modlar için açıklama alır. Önceden sıralanmış modlar yalnızca dosya adıyla listelenir. Çok daha küçük dosya, daha hızlı yapay zeka işleme, daha düşük maliyet.",
   "aiExport.uncatCompactDesc": "Yalnızca sıralanmamış modlar, etiketler ve kısaltılmış açıklamalarla. Önceden sıralanmış modlar dosya adıyla listelenir. Doğruluk ve boyut arasında en iyi denge.",

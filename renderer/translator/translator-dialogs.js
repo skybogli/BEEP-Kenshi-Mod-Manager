@@ -8,14 +8,30 @@ const DLG = (() => {
   let closeCurrent = null;
 
   // A big dialog needs room: a short window (log folded) grows while it is open, then goes back.
+  // (The settings grow by themselves to their tallest tab: fitSettings.)
   let grownFrom = 0;
   new MutationObserver(async () => {
-    const big = !overlay.classList.contains('hidden') && overlay.querySelector('.tr-dialog:not(.small)');
+    const big = !overlay.classList.contains('hidden') && overlay.querySelector('.tr-dialog:not(.small):not(.st-dialog)');
     const size = await window.kmt.win('size');
     if (!size || size.maximized) return;
     if (big && !grownFrom && size.height < 720) { grownFrom = size.height; window.kmt.win('height', 760); }
     else if (!big && grownFrom && overlay.classList.contains('hidden')) { window.kmt.win('height', grownFrom); grownFrom = 0; }
   }).observe(overlay, { attributes: true, childList: true });
+  // The settings: the window grows until the tallest tab fits (no scroll bar, the same height for
+  // every tab), up to the screen; it goes back when they close (the observer above).
+  async function fitSettings(body, panels, shown) {
+    let tallest = 0;
+    for (const p of Object.values(panels)) {
+      for (const q of Object.values(panels)) q.el.classList.toggle('hidden', q !== p);
+      tallest = Math.max(tallest, body.scrollHeight);
+    }
+    for (const [k, q] of Object.entries(panels)) q.el.classList.toggle('hidden', k !== shown());
+    const extra = tallest - body.clientHeight;
+    const size = await window.kmt.win('size');
+    if (extra <= 0 || !size || size.maximized || overlay.classList.contains('hidden')) return;
+    if (!grownFrom) grownFrom = size.height;
+    window.kmt.win('height', size.height + extra);
+  }
 
   // Big ones (설정, 번역 검수) take the window's place under the title bar, like a page;
   // small ones (되돌리기) stay a dialog over it. Messages (ask / alert) have their own layer on top.
@@ -457,6 +473,7 @@ const DLG = (() => {
     const page = { titleKey: 'set.title', kind: 'settings', close: async () => false };
     const close = open(d, () => popPage(page));
     pushPage(page);
+    requestAnimationFrame(() => fitSettings(body, panels, () => tab));
     const snapshot = () => { panels.work.collect(); panels.patch.collect(); panels.route.collect(); panels.etc.collect(); return JSON.stringify({ work, patchcopy, after, route, a: opts.activate, o: opts.overlap, t: tg.target }); };
     let savedState = snapshot();
     const saved = d.querySelector('[data-saved]');

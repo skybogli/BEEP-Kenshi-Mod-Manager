@@ -175,14 +175,14 @@
   "tutorial.overview.conflicts": "<strong>深度冲突检测</strong>——检测数据、资源和关卡冲突，并内联显示实际数值",
   "tutorial.overview.conflictMap": "<strong>冲突地图</strong>——交互式 Kenshi 世界地图，显示室外和室内冲突区域",
   "tutorial.overview.aiSort": "<strong>AI 排序</strong>——导出模组列表，让 AI 建议排列顺序，然后导入",
-  "tutorial.overview.pinUncat": "<strong>固定未分类</strong>——将未分类模组固定到侧边栏，方便拖放排序",
+  "tutorial.overview.pinUncat": "<strong>实际加载顺序</strong> — 按 Kenshi 加载顺序显示已启用模组的面板，用 📌 将模组固定在该位置",
   "tutorial.overview.themes": "<strong>Kenshi 主题</strong>——在工具栏中切换暗色和 Kenshi 主题",
   "tutorial.overview.packs": "<strong>模组包</strong>——保存和加载完整的模组配置方案",
 
   "tutorial.sorting.1": "<strong>拖放</strong>模组到不同的分类列中，排列你的加载顺序。",
   "tutorial.sorting.2": "<strong>多选</strong>——按住 Ctrl 点击可切换选中，按住 Shift 点击可选择范围，然后右键一次性移动到指定分类。",
   "tutorial.sorting.3": "<strong>批量拖动</strong>——选中多个模组后可以一起拖动。",
-  "tutorial.sorting.4": "<strong>固定未分类</strong>后会出现可调整大小的侧边面板，方便排序。",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong>（未分类）是普通的一列（默认在最左边），可以像其他分类一样移动。",
   "tutorial.sorting.5": "<strong>拖动列标题</strong>可以重新排列整个分类的顺序。",
 
   "tutorial.categories.1": "点击工具栏中的「+ 添加分类」按钮来<strong>添加分类</strong>。",
@@ -223,6 +223,10 @@
   "tutorial.aiExport.4": "<strong>所有模组完整版</strong>——完整描述（最准确，文件最大）",
   "tutorial.aiExport.5": "<strong>分批导出</strong>——生成多个文件，每个约 50 个模组",
   "tutorial.aiExport.formatNote": "AI 回复中包含额外说明也没关系——解析器会过滤掉所有非 [分类] 标题和 .mod 文件名的内容。",
+  "tutorial.langNote": "Enhanced Edition 的新功能（模组列表查看器、分享字符串、翻译/补丁工具等）目前在本教程中以英文说明，翻译将在后续更新中提供。",
+  "tutorial.overview.viewer": "<strong>模组列表查看器</strong> — 在单独窗口中打开分享的列表，查看或编辑后再导入",
+  "tutorial.overview.share": "<strong>分享字符串</strong> — 把整个列表变成一行以 <code>BEEP1:</code> 开头的文本，随处粘贴",
+  "tutorial.overview.translator": "<strong>翻译/补丁工具</strong> — 用术语表和谷歌翻译模组，制作补丁模组，并检查结果",
 
   "aiExport.uncatDesc": "仅获取未分类模组的描述。已排序的模组只列出文件名。文件更小，AI 处理更快，消耗更少。",
   "aiExport.uncatCompactDesc": "仅包含未排序模组，使用标签和截断描述。已排序模组仅列出文件名。准确性和文件大小的最佳平衡。",

@@ -25,7 +25,6 @@ Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) ·
 ### Mod list share strings
 - **Advanced export → String**: the whole list (categories, order, on/off) as one short `BEEP1:` string — copy it to the clipboard or save it as txt.
 - **Import ▾ → Import from string… (Ctrl+I)**: paste a string or open a txt that holds one, then import it into the main screen or open it in the mod list viewer.
-- Strings from the other mod managers (`DODO1:` ARK, `BITER1:` Factorio) are recognised and named instead of misread.
 
 ### Translation / patch tool (KMT)
 - A built-in port of KMT, a Kenshi FCS (`.mod`) translation tool: parses `.mod` records and translates the text fields.
@@ -101,7 +100,7 @@ Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) ·
 - **Built-in tutorial** — Full usage guide accessible from the Tutorial tab.
 - **Mod preview images** — Displays Steam Workshop thumbnails in the detail panel.
 - **Integrated browsing** — View mod Steam/Nexus pages, the Kenshi modding guide, and the Steam Workshop directly in the app.
-- **Auto-update** — Checks for updates on launch and notifies you with download links.
+- **Auto-update** — Checks this edition's releases on launch (Help → Check for Updates on Start turns it off; Help → Check for Updates… checks now) and installs a new version in place.
 - **Launch game** — Save your load order and launch Kenshi directly from the app.
 - **GitHub link** — Quick access to the project repository from the toolbar.
 
@@ -115,7 +114,7 @@ Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) ·
 - Build without Node: `python tools/build.py` (copies the v1.2.13 runtime, packs this source, and saves a source copy in `Source Code\BEEP-Kenshi-Mod-Manager-v<version>`).
 
 ### 📌 pins, layouts & settings (1.2.15)
-- **Actual load order with 📌 pins** (as in ARK Mod Manager): loading keeps mods.cfg exactly and pins only the mods that differ from the categories. Dragging in the load order panel / Send to # / Shift+arrows there place a mod and pin it (its category stays). Right-click: *Pin at current position* / *Unpin*; ⟲ above the panel unpins all.
+- **Actual load order with 📌 pins**: loading keeps mods.cfg exactly and pins only the mods that differ from the categories. Dragging in the load order panel / Send to # / Shift+arrows there place a mod and pin it (its category stays). Right-click: *Pin at current position* / *Unpin*; ⟲ above the panel unpins all.
 - **Uncategorized** is a normal column, by default on the left, and can be moved like the others.
 - **Moving a category** (◀ ▶, header drag, Ctrl+Shift+Alt+←/→) moves its mods in the load order; if some are pinned, you choose to move them along or keep them in place. Sorting asks whether to apply to the actual order or sort the category only.
 - **⚙ Settings** (far right, Ctrl+,): language, Kenshi folders, map zoom / column scroll speed, **category width** (default 300px, wider than before), and the **category layout**: by Workshop tags, BEEP defaults or your own list (move / remove / add), auto classify by Steam Workshop tags (leftmost category first), keep the current load order, and Reset categories. Default category names follow the UI language.

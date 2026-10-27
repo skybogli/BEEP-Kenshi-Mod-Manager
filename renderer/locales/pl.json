@@ -279,14 +279,14 @@
   "tutorial.overview.conflicts": "<strong>Głęboka detekcja konfliktów</strong> — wykrywa konflikty danych, zasobów i poziomów z rzeczywistymi wartościami wyświetlanymi w tekście",
   "tutorial.overview.conflictMap": "<strong>Mapa konfliktów</strong> — interaktywna mapa świata Kenshi pokazująca strefy konfliktów zewnętrznych i wewnętrznych",
   "tutorial.overview.aiSort": "<strong>Sortowanie AI</strong> — wyeksportuj listę modów, pozwól AI zaproponować kolejność, a potem ją zaimportuj",
-  "tutorial.overview.pinUncat": "<strong>Przypnij nieskategoryzowane</strong> — przypnij nieskategoryzowane mody, aby łatwiej je sortować przeciąganiem",
+  "tutorial.overview.pinUncat": "<strong>Rzeczywista kolejność ładowania</strong> — panel z aktywnymi modami w kolejności, w jakiej ładuje je Kenshi; 📌 przypina mod na jego pozycji",
   "tutorial.overview.themes": "<strong>Motyw Kenshi</strong> — przełączaj między motywami Ciemnym i Kenshi na pasku narzędzi",
   "tutorial.overview.packs": "<strong>Paczki modów</strong> — zapisuj i wczytuj kompletne konfiguracje modów",
 
   "tutorial.sorting.1": "<strong>Przeciągaj i upuszczaj</strong> mody między kolumnami kategorii, aby ustalić kolejność ładowania.",
   "tutorial.sorting.2": "<strong>Wielokrotne zaznaczanie</strong>: Ctrl+klik (przełączanie) lub Shift+klik (zakres), potem kliknij prawym przyciskiem, aby przenieść wszystkie do kategorii naraz.",
   "tutorial.sorting.3": "<strong>Przeciąganie grupowe</strong> — zaznacz wiele modów i przeciągnij je razem.",
-  "tutorial.sorting.4": "<strong>Przypnij nieskategoryzowane</strong>, aby uzyskać panel boczny do łatwego sortowania.",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong> to zwykła kolumna (domyślnie po lewej) — można ją przenosić jak każdą inną kategorię.",
   "tutorial.sorting.5": "<strong>Przeciągaj nagłówki kolumn</strong>, aby zmienić kolejność całych kategorii.",
 
   "tutorial.categories.1": "<strong>Dodawaj kategorie</strong> przyciskiem \"+ Dodaj kategorię\" na pasku narzędzi.",
@@ -327,6 +327,10 @@
   "tutorial.aiExport.4": "<strong>Wszystkie mody — pełne opisy</strong> — kompletne opisy (najdokładniejsze, największy plik)",
   "tutorial.aiExport.5": "<strong>Podziel na partie</strong> — wiele plików po ok. 50 modów każdy",
   "tutorial.aiExport.formatNote": "Dodatkowe komentarze nie przeszkadzają — parser odrzuca wszystko, co nie jest nagłówkiem [Kategoria] ani nazwą pliku .mod.",
+  "tutorial.langNote": "Nowe funkcje Enhanced Edition (przeglądarka list modów, ciągi do udostępniania, narzędzie tłumaczenia/łatek itp.) są na razie opisane w tym samouczku po angielsku. Tłumaczenie pojawi się w przyszłej aktualizacji.",
+  "tutorial.overview.viewer": "<strong>Przeglądarka list modów</strong> — otwórz udostępnioną listę w osobnym oknie, przejrzyj ją lub edytuj, a potem zaimportuj",
+  "tutorial.overview.share": "<strong>Ciągi do udostępniania</strong> — cała lista jako jedna linia <code>BEEP1:</code> do wklejenia gdziekolwiek",
+  "tutorial.overview.translator": "<strong>Narzędzie tłumaczenia/łatek</strong> — tłumacz mody za pomocą glosariusza i Google, twórz mody-łatki, sprawdzaj wyniki",
 
   "aiExport.uncatDesc": "Pobiera opisy tylko dla modów w Nieskategoryzowane. Już posortowane mody są wymienione wyłącznie po nazwie pliku. Znacznie mniejszy plik, szybsze przetwarzanie AI, niższy koszt.",
   "aiExport.uncatCompactDesc": "Tylko nieposortowane mody z tagami i skróconymi opisami. Już posortowane mody wymienione po nazwie pliku. Najlepszy balans między dokładnością a rozmiarem.",

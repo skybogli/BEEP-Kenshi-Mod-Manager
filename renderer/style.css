@@ -2071,6 +2071,10 @@ body.kenshi-theme .tutorial-guide strong {
   color: #e8dcc8;
 }
 
+/* other languages: the Enhanced Edition parts are in English for now (Korean / English: no note) */
+.tutorial-lang-note { padding: 8px 10px; border-left: 3px solid var(--accent, #c9a24a); background: rgba(201, 162, 74, 0.08); font-size: 12px; }
+.tutorial-lang-note:has(.lang-note-off) { display: none; }
+
 .tutorial-divider {
   border: none;
   border-top: 1px solid #252528;

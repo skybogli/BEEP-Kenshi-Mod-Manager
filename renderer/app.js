@@ -196,7 +196,16 @@ continueBtn.addEventListener('click', async () => {
   config.steamModsPath = steamPathInput.value || '';
   await persistConfig();
   showMainScreen();
+  showTutorialFirst();
 });
+// Every start (and after the first folder setup) the right panel shows the tutorial; the first mod
+// picked goes to its details (editing.js redrawSelection).
+let tutorialUntilPick = false;
+function showTutorialFirst() {
+  if (document.body.classList.contains('vw')) return; // a list viewer window has no tutorial tab
+  switchTab(tabTutorial);
+  tutorialUntilPick = true;
+}
 
 // ===== Main Screen =====
 
@@ -357,7 +366,7 @@ document.getElementById('tutorial-folder-setup-btn').addEventListener('click', (
 
 // GitHub link
 document.getElementById('github-btn').addEventListener('click', () => {
-  window.api.openExternal('https://github.com/Derthi/BEEP-Kenshi-Mod-Manager');
+  window.api.openExternal('https://github.com/skybogli/BEEP-Kenshi-Mod-Manager');
 });
 
 // Pin Uncategorized toggle
@@ -875,7 +884,7 @@ updateBtn.addEventListener('click', async () => {
   // No installable build for this OS (e.g. Linux/macOS) — point at the releases page instead.
   if (!info.downloadUrl || window.api.platform !== 'win32') {
     setStatus(t('status.updateAvailable', { version: info.latestVersion }), 'success');
-    window.api.openExternal(info.releaseUrl || 'https://github.com/Derthi/BEEP-Kenshi-Mod-Manager/releases');
+    window.api.openExternal(info.releaseUrl || 'https://github.com/skybogli/BEEP-Kenshi-Mod-Manager/releases');
     updateBtn.disabled = false;
     return;
   }
@@ -937,9 +946,13 @@ function renderUpdateNotes(body, container) {
   container.classList.remove('hidden');
 }
 
-async function autoCheckForUpdate() {
+// At start (when Help → Check for updates on start is on), or from Help → Check for updates (manual:
+// says so when there is nothing new or the check failed).
+async function autoCheckForUpdate(manual = false) {
+  if (manual) setStatus(t('status.checkingUpdate'));
   const info = await window.api.checkForUpdate();
-  if (!info || !info.hasUpdate) return;
+  if (!info) { if (manual) setStatus(t('status.updateCheckFailed'), 'error'); return; }
+  if (!info.hasUpdate) { if (manual) setStatus(t('status.upToDate', { version: info.currentVersion }), 'success'); return; }
 
   document.getElementById('update-version-text').textContent =
     `v${info.currentVersion} → v${info.latestVersion}`;
@@ -949,7 +962,7 @@ async function autoCheckForUpdate() {
   const downloadLink = document.getElementById('update-download-link');
   const githubLink = document.getElementById('update-github-link');
 
-  const releaseUrl = info.releaseUrl || 'https://github.com/Derthi/BEEP-Kenshi-Mod-Manager/releases';
+  const releaseUrl = info.releaseUrl || 'https://github.com/skybogli/BEEP-Kenshi-Mod-Manager/releases';
 
   if (info.downloadUrl && window.api.platform === 'win32') {
     // Windows: install in place (no Save-As, no blank window).
@@ -2997,7 +3010,13 @@ savePackBtn.addEventListener('click', async () => {
     categories: JSON.parse(JSON.stringify(categories)),
     modCategories: { ...modCategories },
     modOrders: JSON.parse(JSON.stringify(modOrders)),
-    activeMods: mods.filter((m) => m.active).map((m) => m.filename),
+    activeMods: mods.filter((m) => m.active).map((m) => m.filename), // (older versions read this)
+    // each copy's place and on/off (same-name copies apart), the actual order with its 📌 pins
+    placement: mods.map((m) => [layoutKeyOf(m), m.category]),
+    active: mods.filter((m) => m.active).map(layoutKeyOf),
+    order: [...actualOrder],
+    pins: [...pins],
+    uncatPos: uncatPos(),
   };
 
   await window.api.savePack(pack);
@@ -3067,21 +3086,35 @@ async function applyPack(pack) {
   modCategories = pack.modCategories || {};
   modOrders = pack.modOrders || {};
 
-  // Restore active/inactive state
-  const activeSet = new Set(pack.activeMods || []);
-  for (const mod of mods) {
-    mod.active = activeSet.has(mod.filename);
+  if (pack.placement) {
+    // Each copy back to its place and on/off; the actual order as saved (📌 pins kept, and
+    // more pins where mods came or went since)
+    const placement = new Map(pack.placement);
+    const active = new Set(pack.active || []);
+    for (const mod of mods) {
+      mod.category = placement.get(layoutKeyOf(mod)) || UNCATEGORIZED;
+      if (mod.category !== UNCATEGORIZED && !categories.some((c) => c.id === mod.category)) mod.category = UNCATEGORIZED;
+      mod.active = active.has(layoutKeyOf(mod));
+    }
+    if (Number.isInteger(pack.uncatPos)) config.uncatPos = pack.uncatPos;
+    syncModCategories();
+    pins = new Set(pack.pins || []);
+    adoptOrder(pack.order || [], true);
+  } else {
+    // A pack from an older version: on/off by file name, the order from the categories
+    const activeSet = new Set(pack.activeMods || []);
+    for (const mod of mods) {
+      mod.active = activeSet.has(mod.filename);
+    }
+    applyCategoriesToMods();
+    syncModCategories();
+    pins.clear();
+    rebuildOrder([]);
   }
-
-  applyCategoriesToMods();
-  syncModCategories();
-  pins.clear();
-  rebuildOrder([]);
   await persistConfig();
   renderColumns();
 
-  const activeCount = mods.filter((m) => m.active).length;
-  modCount.textContent = `${mods.length} mods, ${activeCount} active`;
+  modCount.textContent = t('modCount', { total: mods.length, active: mods.filter((m) => m.active).length });
   setStatus(t('status.packLoaded', { name: pack.name }), 'success');
 }
 
@@ -4197,15 +4230,16 @@ async function init() {
     applyColumnWidth();
     applyPanelFold(); // (panel-fold.js)
     showMainScreen();
-    autoCheckForUpdate();
+    showTutorialFirst();
+    if (config.autoUpdateCheck !== false) autoCheckForUpdate();
   } else {
     config = config || { categories: [], modCategories: {}, modOrders: {} };
     categories = config.categories || [];
     modCategories = config.modCategories || {};
     modOrders = config.modOrders || {};
-    // Default to Kenshi theme on first launch
-    document.body.classList.add('kenshi-theme');
-    themeToggleCb.checked = true;
+    // First launch: the dark theme (kept from the folder setup on: persistConfig saves it)
+    document.body.classList.remove('kenshi-theme');
+    themeToggleCb.checked = false;
     ensureDefaultCategories();
     localizeCategoryNames();
     setupScreen.classList.remove('hidden');

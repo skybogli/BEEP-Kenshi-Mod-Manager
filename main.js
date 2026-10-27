@@ -554,10 +554,11 @@ function buildAppMenu(labels = {}) {
   // Undo/redo go to the renderer, which undoes mod moves (or text edits in a
   // text field). The keys are only shown here; the renderer handles them.
   const send = (command) => () => mainWindow?.webContents.send('menu-command', command);
-  // Items: { label, command } | null (separator) | { heading } (grey) | { label, sub: items }.
+  // Items: { label, command, checked? } | null (separator) | { heading } (grey) | { label, sub: items }.
   const menuItem = (it) => (!it ? { type: 'separator' }
     : it.heading ? { label: it.heading, enabled: false }
     : it.sub ? { label: it.label, submenu: it.sub.map(menuItem) }
+    : it.checked !== undefined ? { label: it.label, type: 'checkbox', checked: it.checked, click: send(it.command) }
     : { label: it.label, click: send(it.command) });
   const template = [
     { label: l('file', 'File'), submenu: labels.fileItems ? labels.fileItems.map(menuItem) : [
@@ -599,11 +600,10 @@ function buildAppMenu(labels = {}) {
       { role: 'close', label: l('close', 'Close') },
     ] },
     { label: l('help', 'Help'), submenu: [
-      ...(labels.helpItems || []).map(menuItem),
-      ...(labels.helpItems ? [{ type: 'separator' }] : []),
-      { label: l('github', 'GitHub Page'), click: open('https://github.com/Derthi/BEEP-Kenshi-Mod-Manager') },
-      { label: l('steamGuide', 'Steam Workshop Guide'), click: open('https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622') },
-      { label: l('discord', 'Discord'), click: open('https://discord.gg/QvFTmRKHSz') },
+      // The renderer's items carry the update check and the links (this edition's / the original's).
+      ...(labels.helpItems ? labels.helpItems.map(menuItem) : [
+        { label: l('github', 'GitHub Page'), click: open('https://github.com/skybogli/BEEP-Kenshi-Mod-Manager') },
+      ]),
     ] },
   ];
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));

@@ -175,14 +175,14 @@
   "tutorial.overview.conflicts": "<strong>Tiefgehende Konflikterkennung</strong> — erkennt Daten-, Asset- und Level-Konflikte mit tatsächlichen Werten inline",
   "tutorial.overview.conflictMap": "<strong>Konfliktkarte</strong> — interaktive Kenshi-Weltkarte mit Außen- und Innenbereichs-Konfliktzonen",
   "tutorial.overview.aiSort": "<strong>AI Sort</strong> — exportiere deine Mod-Liste, lass eine KI eine Reihenfolge vorschlagen und importiere sie dann",
-  "tutorial.overview.pinUncat": "<strong>Unkategorisiert anheften</strong> — hefte unkategorisierte Mods an, um sie einfach per Drag & Drop zu sortieren",
+  "tutorial.overview.pinUncat": "<strong>Tatsächliche Ladereihenfolge</strong> — ein Panel mit den aktiven Mods in der Reihenfolge, in der Kenshi sie lädt; 📌 heftet einen Mod an seine Position",
   "tutorial.overview.themes": "<strong>Kenshi-Theme</strong> — wechsle in der Symbolleiste zwischen Dunkel- und Kenshi-Theme",
   "tutorial.overview.packs": "<strong>Mod-Pakete</strong> — speichere und lade komplette Mod-Konfigurationen",
 
   "tutorial.sorting.1": "<strong>Ziehe Mods per Drag & Drop</strong> zwischen Kategoriespalten, um deine Ladereihenfolge zu sortieren.",
   "tutorial.sorting.2": "<strong>Mehrfachauswahl</strong> mit Strg+Klick (umschalten) oder Umschalt+Klick (Bereich), dann Rechtsklick, um alle auf einmal in eine Kategorie zu verschieben.",
   "tutorial.sorting.3": "<strong>Gruppenweise ziehen</strong> — wähle mehrere Mods aus und ziehe sie gemeinsam.",
-  "tutorial.sorting.4": "<strong>Unkategorisiert anheften</strong>, um ein größenverstellbares Seitenpanel zum bequemen Sortieren zu erhalten.",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong> ist eine normale Spalte (standardmäßig links) und lässt sich wie jede andere Kategorie verschieben.",
   "tutorial.sorting.5": "<strong>Spaltenüberschriften ziehen</strong>, um ganze Kategorien neu anzuordnen.",
 
   "tutorial.categories.1": "<strong>Kategorien hinzufügen</strong> mit der Schaltfläche «+ Kategorie hinzufügen» in der Symbolleiste.",
@@ -223,6 +223,10 @@
   "tutorial.aiExport.4": "<strong>Alle Mods Vollständig</strong> — komplette Beschreibungen (am genauesten, größte Datei)",
   "tutorial.aiExport.5": "<strong>In Stapel aufteilen</strong> — mehrere Dateien mit je ca. 50 Mods",
   "tutorial.aiExport.formatNote": "Zusätzliche Kommentare sind kein Problem — der Parser filtert alles heraus, was kein [Kategorie]-Header oder .mod-Dateiname ist.",
+  "tutorial.langNote": "Die neuen Funktionen der Enhanced Edition (Modlisten-Viewer, Listen-Strings, Übersetzungs-/Patch-Tool usw.) sind in diesem Tutorial vorerst auf Englisch beschrieben. Eine Übersetzung folgt in einem späteren Update.",
+  "tutorial.overview.viewer": "<strong>Modlisten-Viewer</strong> — eine geteilte Liste im eigenen Fenster öffnen, ansehen oder bearbeiten und dann importieren",
+  "tutorial.overview.share": "<strong>Listen-Strings</strong> — die ganze Liste als eine <code>BEEP1:</code>-Zeile, die sich überall einfügen lässt",
+  "tutorial.overview.translator": "<strong>Übersetzungs-/Patch-Tool</strong> — Mods mit Glossar und Google übersetzen, Patch-Mods erstellen, Ergebnisse prüfen",
 
   "aiExport.uncatDesc": "Ruft nur Beschreibungen für Mods in Unkategorisiert ab. Bereits sortierte Mods werden nur mit Dateinamen aufgeführt. Deutlich kleinere Datei, schnellere KI-Verarbeitung, geringere Kosten.",
   "aiExport.uncatCompactDesc": "Nur unsortierte Mods mit Tags + gekürzten Beschreibungen. Bereits sortierte Mods werden nur mit Dateinamen aufgeführt. Bestes Verhältnis von Genauigkeit und Dateigröße.",

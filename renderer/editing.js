@@ -615,6 +615,8 @@ function ctrlToggle(mod) {
 // show it in the detail panel, without drawing every list again.
 let selDrawnFor = null;
 function redrawSelection() {
+  // the tutorial shown at start: the first mod picked (any list, mouse or keys) shows its details
+  if (tutorialUntilPick && selectedMod) { tutorialUntilPick = false; switchTab(tabDetails); }
   const rel = selectedMod && conflictData ? conflictData.modConflicts[selectedMod.realFile] : null;
   for (const card of document.querySelectorAll('#category-columns .mod-card, #pinned-uncat-panel .mod-card, #order-mods .mod-card')) {
     const f = card.dataset.filename;
@@ -4480,9 +4482,22 @@ function moveMenuItems() {
   return [5, 6, 7].flatMap((g, i) => [...(i ? [null] : []), { heading: t(heads[g]) }, ...shortcutItems([g])]);
 }
 
+// Help: tutorial / Workshop, this edition (update check, its GitHub page), the original project's links.
 function helpMenuItems() {
-  return [['tutorial', shortcutLabel('tutorial')], ['workshop', shortcutLabel('workshop')]];
+  return [
+    ['tutorial', shortcutLabel('tutorial')], ['workshop', shortcutLabel('workshop')], null,
+    { heading: t('menu.headEdition') },
+    ['checkUpdate', ''], ['autoUpdate', '', config?.autoUpdateCheck !== false], ['github', ''], null,
+    { heading: t('menu.headOriginal') },
+    ['githubOriginal', ''], ['steamGuide', ''], ['discord', ''],
+  ];
 }
+const HELP_LINKS = {
+  github: 'https://github.com/skybogli/BEEP-Kenshi-Mod-Manager',
+  githubOriginal: 'https://github.com/Derthi/BEEP-Kenshi-Mod-Manager',
+  steamGuide: 'https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622',
+  discord: 'https://discord.gg/QvFTmRKHSz',
+};
 
 // Windows names keys in its own language in menus, so shortcuts are written into the
 // labels and padded (measured in the menu font) until they line up in one column.
@@ -4502,7 +4517,9 @@ function menuItemsWithKeys(items) {
     let gap = target - w(label);
     const spaces = Math.max(1, Math.floor(gap / space));
     gap -= spaces * space;
-    return { command: it[0], label: label + ' '.repeat(spaces) + ' '.repeat(Math.max(0, Math.round(gap / thin))) + it[1] };
+    const item = { command: it[0], label: label + ' '.repeat(spaces) + ' '.repeat(Math.max(0, Math.round(gap / thin))) + it[1] };
+    if (typeof it[2] === 'boolean') item.checked = it[2]; // a check box
+    return item;
   });
 }
 
@@ -4517,7 +4534,17 @@ function menuCommand(command) {
     return;
   }
   if (command === 'workshop') { openWorkshopSite(); return; }
+  if (HELP_LINKS[command]) { window.api.openExternal(HELP_LINKS[command]); return; }
+  if (command === 'autoUpdate') {
+    if (!config) return;
+    config.autoUpdateCheck = config.autoUpdateCheck === false;
+    persistConfig();
+    updateAppMenu();
+    setStatus(t(config.autoUpdateCheck ? 'status.autoUpdateOn' : 'status.autoUpdateOff'), 'success');
+    return;
+  }
   if (dialogOpen() || mainScreen.classList.contains('hidden')) return;
+  if (command === 'checkUpdate') { autoCheckForUpdate(true); return; }
   if (command === 'tutorial') { switchTab(tabTutorial); return; }
   if (command === 'shortcuts') { shortcutsModal(); return; }
   if (EDIT_COMMANDS[command]) runEditCommand(command);

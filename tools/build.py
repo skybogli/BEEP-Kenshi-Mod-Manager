@@ -48,9 +48,15 @@ def version():
 
 
 def copy_runtime(src, out):
-    """Copy a built app folder, leaving out its app.asar."""
-    skip = shutil.ignore_patterns('app.asar', 'app.asar.unpacked', 'app')
-    shutil.copytree(src, out, ignore=lambda d, names: skip(d, names) if os.path.basename(d) == 'resources' else [])
+    """Copy a built app folder, leaving out its app.asar, backups and what its user saved there
+    (modpacks: the packs live next to the exe), so a build never carries anyone's packs."""
+    skip_res = shutil.ignore_patterns('app.asar', 'app.asar.unpacked', 'app', '*.bak')
+    skip_top = shutil.ignore_patterns('modpacks', 'update.zip', '*.bak')
+    def ignore(d, names):
+        if os.path.normcase(os.path.abspath(d)) == os.path.normcase(os.path.abspath(src)):
+            return skip_top(d, names)
+        return skip_res(d, names) if os.path.basename(d) == 'resources' else []
+    shutil.copytree(src, out, ignore=ignore)
 
 
 def pack_app(out):

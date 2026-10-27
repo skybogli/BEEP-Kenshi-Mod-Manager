@@ -279,14 +279,14 @@
   "tutorial.overview.conflicts": "<strong>詳細な競合検出</strong> — データ、アセット、レベルの競合を検出し、実際の値をインラインで表示",
   "tutorial.overview.conflictMap": "<strong>競合マップ</strong> — 屋外・屋内の競合ゾーンを表示するインタラクティブな Kenshi ワールドマップ",
   "tutorial.overview.aiSort": "<strong>AI ソート</strong> — Mod リストをエクスポートし、AI にロード順を提案させてインポート",
-  "tutorial.overview.pinUncat": "<strong>未分類を固定</strong> — 未分類の Mod を固定表示して、ドラッグ＆ドロップで簡単に並べ替え",
+  "tutorial.overview.pinUncat": "<strong>実際のロード順</strong> — 有効な Mod を Kenshi が読み込む順に表示するパネル。📌 で Mod をその位置に固定",
   "tutorial.overview.themes": "<strong>Kenshi テーマ</strong> — ツールバーでダークテーマと Kenshi テーマを切り替え",
   "tutorial.overview.packs": "<strong>Mod パック</strong> — Mod 構成をまるごと保存・読み込み",
 
   "tutorial.sorting.1": "<strong>ドラッグ＆ドロップ</strong>でカテゴリ列間の Mod を移動して、ロード順を並べ替えられます。",
   "tutorial.sorting.2": "<strong>複数選択</strong>は Ctrl+クリック（個別切替）や Shift+クリック（範囲選択）で行い、右クリックでまとめてカテゴリに移動できます。",
   "tutorial.sorting.3": "<strong>まとめてドラッグ</strong> — 複数の Mod を選択して、一括でドラッグ移動できます。",
-  "tutorial.sorting.4": "<strong>未分類を固定</strong>すると、リサイズ可能なサイドパネルが表示され、簡単に並べ替えできます。",
+  "tutorial.sorting.4": "<strong>Uncategorized</strong>（未分類）は通常の列です（既定では左端）。ほかのカテゴリと同じように移動できます。",
   "tutorial.sorting.5": "<strong>列ヘッダーをドラッグ</strong>して、カテゴリ全体の順序を入れ替えられます。",
 
   "tutorial.categories.1": "ツールバーの<strong>「+ カテゴリを追加」</strong>ボタンで新しいカテゴリを作成できます。",
@@ -327,6 +327,10 @@
   "tutorial.aiExport.4": "<strong>全 Mod 詳細</strong> — 完全な説明文付き（最も正確だがファイルサイズ大）",
   "tutorial.aiExport.5": "<strong>バッチ分割</strong> — 約50件ずつ複数ファイルに分割",
   "tutorial.aiExport.formatNote": "AI の応答に余計なコメントが含まれていても問題ありません。パーサーは [カテゴリ] ヘッダーと .mod ファイル名以外をすべて除去します。",
+  "tutorial.langNote": "Enhanced Edition の新機能（MODリストビューア、共有用文字列、翻訳・パッチツールなど）は、現在このチュートリアルでは英語で説明しています。翻訳は今後のアップデートで対応予定です。",
+  "tutorial.overview.viewer": "<strong>MODリストビューア</strong> — 共有されたリストを別ウィンドウで開き、確認・編集してからインポート",
+  "tutorial.overview.share": "<strong>共有用文字列</strong> — リスト全体を <code>BEEP1:</code> で始まる1行にして、どこにでも貼り付け",
+  "tutorial.overview.translator": "<strong>翻訳・パッチツール</strong> — 用語集と Google 翻訳で Mod を翻訳し、パッチ Mod を作成し、結果を確認",
 
   "aiExport.uncatDesc": "未分類の Mod のみ説明文を取得します。分類済みの Mod はファイル名だけ記載されます。ファイルが小さく、AI の処理が速く、コストも抑えられます。",
   "aiExport.uncatCompactDesc": "未分類の Mod のみ、タグと短縮した説明文を使用します。分類済みの Mod はファイル名のみ記載されます。精度とファイルサイズのバランスが最も良い形式です。",
