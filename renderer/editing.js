@@ -1238,6 +1238,7 @@ refreshBtn.addEventListener('click', refreshWithConfirm);
 
 window.api.onConfirmClose(async () => {
   window.api.closeAck();
+  if (await updateBlocksClose()) return; // an update downloading / being unpacked (app.js)
   if (mainScreen.classList.contains('hidden') || !isDirty()) {
     await forgetSteamRecords({ quiet: true, closing: true });
     window.api.closeNow();

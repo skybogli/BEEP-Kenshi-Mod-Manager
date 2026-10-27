@@ -849,21 +849,96 @@ document.addEventListener('keydown', async (e) => {
 
 // ===== Update Check =====
 
-// Confirm, then download + install the update in place (the app relaunches on success).
-// Windows-only; the main process refuses to auto-apply on other platforms.
-async function doUpdate(info) {
-  const confirmed = await showConfirmModal(
-    t('confirm.updateAvailable', { current: info.currentVersion, latest: info.latestVersion })
-  );
-  if (!confirmed) { setStatus(t('status.updateCancelled')); return false; }
-
-  setStatus(t('status.downloading', { version: info.latestVersion }));
-  const result = await window.api.downloadUpdate(info.downloadUrl);
-  if (result.success) {
-    setStatus(t('status.updateInstalled'), 'success');
-    return true;
+// ---- The update's progress, at the left of the status bar ----
+// 업데이트 받는 중  █████████░░░░░░░░░  50%  (60.2 / 120.4 MB)   [✕ 취소]
+// then 업데이트 준비 중 (a bar that runs: unpacking) and 다시 시작합니다…; ✕ only while downloading.
+const UPD = (() => {
+  const W = 18;
+  const el = document.createElement('div');
+  el.id = 'update-progress';
+  el.className = 'update-progress hidden';
+  el.innerHTML = '<span class="up-text"></span><span class="up-bar"></span><span class="up-pct"></span><span class="up-size"></span><button class="up-cancel" type="button"></button>';
+  statusBar.before(el);
+  const $u = (c) => el.querySelector(c);
+  let phase = null;
+  let spin = null;
+  const mb = (n) => (n / 1048576).toFixed(1);
+  const stopSpin = () => { clearInterval(spin); spin = null; };
+  function show(p) {
+    phase = p.phase;
+    el.classList.remove('hidden');
+    statusBar.classList.add('hidden');
+    $u('.up-cancel').textContent = '✕ ' + t('update.cancel');
+    $u('.up-cancel').title = t('update.cancelTip');
+    $u('.up-cancel').classList.toggle('hidden', !['download', 'retry', 'start'].includes(p.phase));
+    if (p.phase === 'download' || p.phase === 'start') {
+      stopSpin();
+      const r = p.total ? Math.min(1, p.got / p.total) : 0;
+      const n = Math.round(r * W);
+      $u('.up-text').textContent = t('update.downloading');
+      $u('.up-bar').textContent = '█'.repeat(n) + '░'.repeat(W - n);
+      $u('.up-pct').textContent = p.total ? Math.floor(r * 100) + '%' : '';
+      $u('.up-size').textContent = p.total ? `(${mb(p.got || 0)} / ${mb(p.total)} MB)` : '';
+    } else if (p.phase === 'retry') {
+      $u('.up-text').textContent = t('update.retrying', { n: p.attempt, tries: p.tries });
+    } else if (p.phase === 'unpack' || p.phase === 'restart') {
+      $u('.up-text').textContent = t(p.phase === 'unpack' ? 'update.unpacking' : 'update.restarting');
+      $u('.up-pct').textContent = '';
+      $u('.up-size').textContent = p.phase === 'unpack' ? t('update.unpackNote') : '';
+      if (!spin) {
+        let i = 0;
+        spin = setInterval(() => { i = (i + 1) % W; $u('.up-bar').textContent = Array.from({ length: W }, (_, k) => (Math.abs(k - i) < 3 ? '▒' : '░')).join(''); }, 120);
+      }
+    }
   }
+  function end() {
+    phase = null;
+    stopSpin();
+    el.classList.add('hidden');
+    statusBar.classList.remove('hidden');
+  }
+  $u('.up-cancel').addEventListener('click', () => window.api.cancelUpdate());
+  window.api.onUpdateProgress(show);
+  return { show, end, phase: () => phase };
+})();
+
+// Download, unpack, then the app quits and comes back as the new version (lib/updater.js).
+// Windows-only; the main process refuses to install on other platforms.
+async function doUpdate(info, { asked = false } = {}) {
+  if (UPD.phase()) return false;
+  if (!asked) {
+    const confirmed = await showConfirmModal(
+      t('confirm.updateAvailable', { current: info.currentVersion, latest: info.latestVersion })
+    );
+    if (!confirmed) { setStatus(t('status.updateCancelled')); return false; }
+  }
+  UPD.show({ phase: 'start', got: 0, total: info.size || 0 });
+  const result = await window.api.downloadUpdate(info.downloadUrl, info.latestVersion);
+  if (result.success) return true; // (the app quits now and starts again as the new version)
+  UPD.end();
+  if (result.cancelled) { setStatus(t('update.cancelled')); return false; }
+  const choice = await choiceModal(t('update.failTitle'), t('update.failText', { error: result.error }), [
+    { key: 'close', text: t('modal.close') },
+    { key: 'page', text: t('update.openPage') },
+    { key: 'retry', text: t('update.retry'), primary: true },
+  ]);
+  if (choice === 'retry') return doUpdate(info, { asked: true });
+  if (choice === 'page') window.api.openExternal(info.releaseUrl || 'https://github.com/skybogli/BEEP-Kenshi-Mod-Manager/releases');
   setStatus(t('status.updateFailed', { error: result.error }), 'error');
+  return false;
+}
+
+// Closing while an update downloads: cancel it first (asked); while it is being unpacked: not now.
+async function updateBlocksClose() {
+  const p = UPD.phase();
+  if (!p) return false;
+  if (p === 'unpack' || p === 'restart') { setStatus(t('update.busyClose'), 'error'); return true; }
+  const choice = await choiceModal(t('update.closeTitle'), t('update.closeText'), [
+    { key: 'keep', text: t('update.closeNo'), primary: true },
+    { key: 'close', text: t('update.closeYes') },
+  ]);
+  if (choice !== 'close') return true;
+  await window.api.cancelUpdate();
   return false;
 }
 
@@ -953,9 +1028,16 @@ function renderUpdateNotes(body, container) {
 // At start (when Help → Check for updates on start is on), or from Help → Check for updates (manual:
 // says so when there is nothing new or the check failed).
 async function autoCheckForUpdate(manual = false) {
+  if (UPD.phase()) return;
   if (manual) setStatus(t('status.checkingUpdate'));
   const info = await window.api.checkForUpdate();
   if (!info) { if (manual) setStatus(t('status.updateCheckFailed'), 'error'); return; }
+  if (info.disabled) return;
+  // what the last update did: done, or the files couldn't be replaced (that version isn't
+  // offered again at start — no restart loop; Help → Check for updates still tries)
+  const last = info.last;
+  if (last?.updated && !manual) setStatus(t('update.done', { version: last.updated }), 'success');
+  if (last?.failed && !manual && last.failed === info.latestVersion) { setStatus(t('update.notApplied', { version: last.failed }), 'error'); return; }
   if (!info.hasUpdate) { if (manual) setStatus(t('status.upToDate', { version: info.currentVersion }), 'success'); return; }
 
   document.getElementById('update-version-text').textContent =
@@ -974,7 +1056,7 @@ async function autoCheckForUpdate(manual = false) {
     downloadLink.onclick = (e) => {
       e.preventDefault();
       updateModal.classList.add('hidden');
-      doUpdate(info);
+      doUpdate(info, { asked: true }); // (this dialog was the question)
     };
   } else if (info.downloadUrl) {
     // Other platforms: in-app install isn't supported — open the releases page in the browser.

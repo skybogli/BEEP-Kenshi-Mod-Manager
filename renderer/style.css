@@ -3415,3 +3415,15 @@ body.kenshi-theme .kmt-dock { background: #4a3e30; border-color: #6a5a45; color:
 .category-column.km-noload .column-mods { opacity: 0.55; }
 .category-column.km-noload .column-header { background-image: repeating-linear-gradient(135deg, rgba(200, 60, 60, 0.10) 0 6px, transparent 6px 12px); }
 .mod-card .card-checkbox.km-parked input { outline: 1px dashed rgba(220, 90, 90, 0.8); outline-offset: 1px; opacity: 0.8; }
+
+/* An update downloading / being unpacked: at the left of the status bar, its cancel button
+   right after it (well away from the counts at the right) */
+.update-progress { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 0 10px; font-size: 12px; white-space: nowrap; overflow: hidden; color: var(--text, #ddd); }
+.update-progress.hidden { display: none; }
+.update-progress .up-text { font-weight: 600; }
+.update-progress .up-bar { font-family: Consolas, 'Courier New', monospace; letter-spacing: -1px; color: #5fb3a5; }
+.update-progress .up-pct { min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+.update-progress .up-size { opacity: 0.75; font-variant-numeric: tabular-nums; }
+.update-progress .up-cancel { margin-left: 14px; padding: 1px 10px; border: 1px solid #6a4a4a; border-radius: 3px; background: rgba(200, 60, 60, 0.15); color: inherit; font: inherit; cursor: pointer; }
+.update-progress .up-cancel:hover { background: rgba(200, 60, 60, 0.35); }
+.update-progress .up-cancel.hidden { display: none; }

@@ -414,22 +414,25 @@ ipcMain.handle('diff-sector-conflict', (_event, zonePathsByMod, gamePath, zx, zy
   catch { return null; }
 });
 
-// Updater
-ipcMain.handle('check-for-update', () => {
-  return updater.checkForUpdate();
+// Updater (lib/updater.js): checked, downloaded with progress ('update-progress'), unpacked; then
+// the app quits and a script puts the new files in and starts it again.
+const lastUpdate = updater.lastUpdate(app.getPath('userData')); // what the last update did
+ipcMain.handle('check-for-update', async () => {
+  const info = await updater.checkForUpdate();
+  return info && { ...info, last: lastUpdate };
 });
+ipcMain.handle('update-state', () => ({ enabled: updater.enabled(), last: lastUpdate, busy: updater.busy() }));
+ipcMain.handle('cancel-update', () => updater.cancelUpdate());
 
-ipcMain.handle('download-update', async (_event, downloadUrl) => {
-  const appPath = path.dirname(app.getPath('exe'));
-  const result = await updater.downloadAndApplyUpdate(downloadUrl, appPath);
-  if (result.success) {
-    // Relaunch after a short delay
-    setTimeout(() => {
-      app.relaunch();
-      app.exit(0);
-    }, 1000);
-  }
-  return result;
+ipcMain.handle('download-update', async (event, downloadUrl, version) => {
+  const send = (p) => { if (!event.sender.isDestroyed()) event.sender.send('update-progress', p); };
+  const result = await updater.prepareUpdate(downloadUrl, send);
+  if (!result.success) return result;
+  if (!app.isPackaged) return { success: false, error: 'not a built app (nothing to replace)' };
+  send({ phase: 'restart' });
+  updater.installAfterQuit(result.staged, path.dirname(app.getPath('exe')), app.getPath('userData'), version);
+  setTimeout(() => app.exit(0), 800);
+  return { success: true };
 });
 
 ipcMain.handle('open-external', (_event, url) => {
