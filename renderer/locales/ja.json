@@ -42,7 +42,7 @@
 
   "tabs.guide": "Mod ガイド",
   "tabs.workshop": "Workshop",
-  "tabs.packs": "パック",
+  "tabs.packs": "プリセット",
   "tabs.tutorial": "チュートリアル",
   "tabs.details": "詳細",
   "tabs.modPage": "Mod ページ",
@@ -88,7 +88,7 @@
   "modal.gotIt": "了解",
   "modal.later": "後で",
 
-  "packs.title": "Mod パック",
+  "packs.title": "プリセット",
   "packs.saveCurrent": "現在の状態を保存",
   "packs.savePrompt": "Mod パックの保存名:",
   "packs.loadConfirm": "Mod パック「{name}」を読み込みますか？現在のカテゴリとロード順が置き換えられます。",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP は Kenshi の Mod を列として表示されるカテゴリに整理するのに役立ちます。ロード順は左から右、上から下に読み込まれます。初回起動時には既存の mods.cfg のロード順が保持されます。",
   "tutorial.sortingMods": "Mod の並べ替え",
   "tutorial.categories": "カテゴリ",
-  "tutorial.modPacks": "Mod パック",
+  "tutorial.modPacks": "プリセット",
   "tutorial.importExport": "インポートとエクスポート",
   "tutorial.conflictDetection": "競合検出",
   "tutorial.otherFeatures": "その他の機能",

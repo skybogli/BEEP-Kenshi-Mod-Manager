@@ -3407,3 +3407,11 @@ body.kenshi-theme .status-row .status-bar { background: none; }
 .kmt-dock-job:empty { display: none; }
 .kmt-dock-arrow { font-size: 9px; opacity: 0.7; }
 body.kenshi-theme .kmt-dock { background: #4a3e30; border-color: #6a5a45; color: #e0d0b0; }
+
+/* 🚫 categories that don't load: the column dimmed, its button lit, the check boxes only say
+   what the mods get when they leave (a dashed box) */
+.km-noload-btn { filter: grayscale(1); opacity: 0.45; font-size: 11px; }
+.km-noload-btn.on { filter: none; opacity: 1; background: rgba(200, 60, 60, 0.25); border-radius: 3px; }
+.category-column.km-noload .column-mods { opacity: 0.55; }
+.category-column.km-noload .column-header { background-image: repeating-linear-gradient(135deg, rgba(200, 60, 60, 0.10) 0 6px, transparent 6px 12px); }
+.mod-card .card-checkbox.km-parked input { outline: 1px dashed rgba(220, 90, 90, 0.8); outline-offset: 1px; opacity: 0.8; }

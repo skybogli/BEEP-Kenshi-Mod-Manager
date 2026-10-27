@@ -42,7 +42,7 @@
 
   "tabs.guide": "Руководство",
   "tabs.workshop": "Мастерская",
-  "tabs.packs": "Наборы",
+  "tabs.packs": "Пресеты",
   "tabs.tutorial": "Обучение",
   "tabs.details": "Подробности",
   "tabs.modPage": "Страница мода",
@@ -88,7 +88,7 @@
   "modal.gotIt": "Понятно",
   "modal.later": "Позже",
 
-  "packs.title": "Наборы модов",
+  "packs.title": "Пресеты",
   "packs.saveCurrent": "Сохранить текущий",
   "packs.savePrompt": "Сохранить набор модов как:",
   "packs.loadConfirm": "Загрузить набор модов «{name}»? Текущие категории и порядок загрузки будут заменены.",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP помогает организовать ваши моды для Kenshi по категориям, отображаемым в виде колонок. Порядок загрузки читается слева направо, сверху вниз. При первом запуске сохраняется существующий порядок загрузки из mods.cfg.",
   "tutorial.sortingMods": "Сортировка модов",
   "tutorial.categories": "Категории",
-  "tutorial.modPacks": "Наборы модов",
+  "tutorial.modPacks": "Пресеты",
   "tutorial.importExport": "Импорт и экспорт",
   "tutorial.conflictDetection": "Обнаружение конфликтов",
   "tutorial.otherFeatures": "Другие функции",

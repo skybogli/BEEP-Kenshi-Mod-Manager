@@ -42,7 +42,7 @@
 
   "tabs.guide": "Poradnik modowania",
   "tabs.workshop": "Warsztat",
-  "tabs.packs": "Paczki",
+  "tabs.packs": "Presety",
   "tabs.tutorial": "Samouczek",
   "tabs.details": "Szczegóły",
   "tabs.modPage": "Strona moda",
@@ -88,7 +88,7 @@
   "modal.gotIt": "Rozumiem",
   "modal.later": "Później",
 
-  "packs.title": "Paczki modów",
+  "packs.title": "Presety",
   "packs.saveCurrent": "Zapisz bieżące",
   "packs.savePrompt": "Zapisz paczkę modów jako:",
   "packs.loadConfirm": "Wczytać paczkę modów \"{name}\"? Spowoduje to zastąpienie bieżących kategorii i kolejności ładowania.",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP pomaga organizować mody do Kenshi w kategorie wyświetlane jako kolumny. Kolejność ładowania czyta się od lewej do prawej, z góry na dół. Istniejąca kolejność z mods.cfg jest zachowywana przy pierwszym uruchomieniu.",
   "tutorial.sortingMods": "Sortowanie modów",
   "tutorial.categories": "Kategorie",
-  "tutorial.modPacks": "Paczki modów",
+  "tutorial.modPacks": "Presety",
   "tutorial.importExport": "Import i eksport",
   "tutorial.conflictDetection": "Wykrywanie konfliktów",
   "tutorial.otherFeatures": "Inne funkcje",

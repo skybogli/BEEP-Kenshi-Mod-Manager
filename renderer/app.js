@@ -195,6 +195,7 @@ continueBtn.addEventListener('click', async () => {
   config.gamePath = gamePathInput.value;
   config.steamModsPath = steamPathInput.value || '';
   await persistConfig();
+  newSetup = true; // (Uncategorized's 🚫 default: editing.js initNoLoad)
   showMainScreen();
   showTutorialFirst();
 });
@@ -258,6 +259,7 @@ async function loadMods() {
 
     // mods.cfg as read is the actual order; pins explain where it differs from the categories.
     const cfgOrder = [...new Set(mods.filter((m) => m.active && m.order >= 0).sort((a, b) => a.order - b.order).map((m) => m.filename))];
+    initNoLoad(); // 🚫 categories (editing.js)
     initLoadOrder(cfgOrder);
 
     selectedMod = null;
@@ -267,6 +269,7 @@ async function loadMods() {
     modCount.textContent = t('modCount', { total: mods.length, active: activeCount });
 
     updateDepStatus();
+    if (noLoadNotice) { noLoadNotice = false; setStatus(t('noLoad.firstRun')); }
     resetHistoryBaseline();
     // mods.cfg as read: what "unsaved changes" are measured against.
     markSaved(cfgOrder);
@@ -771,7 +774,8 @@ function buildExportText(o = EXPORT_ALL) {
   const line = (mod) => {
     // name|state, and |source:folder for a second copy of a name (older versions ignore it)
     const copy = mod.filename !== mod.realFile ? '|' + mod.filename.split('::')[1] : '';
-    return `${mod.realFile}|${exportIsOn(mod) ? 'active' : 'inactive'}${copy}`;
+    // (a mod in a 🚫 category: the on it keeps for when it leaves; the data line names those categories)
+    return `${mod.realFile}|${exportIsOn(mod) || mod.parked ? 'active' : 'inactive'}${copy}`;
   };
   const listed = [];
   let catCount = 0;
@@ -1774,6 +1778,8 @@ function randomColor() {
 // ===== Persist =====
 
 async function persistConfig() {
+  applyNoLoad();
+  config.parked = parkedKeys();
   config.categories = categories;
   config.modCategories = modCategories;
   config.modOrders = modOrders;
@@ -1813,6 +1819,8 @@ function captureLayout() {
     order: actualOrder,
     pins: [...pins],
     uncatPos: uncatPos(),
+    uncatNoLoad: config?.uncatNoLoad === true, // 🚫 (the other categories carry theirs)
+    parked: parkedKeys(),
     removed: removedSids(), // deleted mods (editing.js), for undo
     ghosts: config?.ghosts || {},
   });
@@ -1849,16 +1857,19 @@ function restoreLayout(json, { keepCategories = false } = {}) {
   modOrders = state.modOrders;
   const placement = new Map(state.placement);
   const active = new Set(state.active);
+  const parked = new Set(state.parked || []);
   for (const mod of mods) {
     mod.category = placement.get(layoutKeyOf(mod)) || UNCATEGORIZED;
     if (mod.category !== UNCATEGORIZED && !categories.some((c) => c.id === mod.category)) {
       mod.category = UNCATEGORIZED;
     }
     mod.active = active.has(layoutKeyOf(mod));
+    mod.parked = parked.has(layoutKeyOf(mod));
   }
   if (state.order) actualOrder = [...state.order];
   pins = new Set(state.pins || []);
   if (!keepCategories && Number.isInteger(state.uncatPos)) config.uncatPos = state.uncatPos;
+  if (!keepCategories && typeof state.uncatNoLoad === 'boolean') config.uncatNoLoad = state.uncatNoLoad;
   historyBaseline = captureLayout();
   persistConfig();
   renderColumns();
@@ -1943,6 +1954,7 @@ function syncModCategories() {
 
 function renderColumns() {
   syncGhostMods(); // placeholders for mods that aren't installed (editing.js), always off
+  applyNoLoad(); // mods in a 🚫 category stay off (editing.js)
   enforceOneCopy();
   applyAutoSorts();
   syncActualOrder();
@@ -2043,6 +2055,8 @@ function createColumn(catId, name, color, globalOrder) {
   const col = document.createElement('div');
   col.className = 'category-column';
   col.dataset.category = catId;
+  const noLoad = catNoLoad(catId); // 🚫: its check boxes say what the mods get when they leave
+  col.classList.toggle('km-noload', noLoad);
 
   // Header
   const header = document.createElement('div');
@@ -2056,12 +2070,13 @@ function createColumn(catId, name, color, globalOrder) {
   const headerCb = document.createElement('input');
   headerCb.type = 'checkbox';
   headerCb.className = 'column-header-checkbox';
-  headerCb.checked = catMods.length > 0 && activeInCat.length === catMods.length;
+  headerCb.checked = catMods.length > 0 && catMods.every((m) => (noLoad ? m.parked : m.active));
   headerCb.addEventListener('click', (e) => {
     e.stopPropagation();
     const turnOn = headerCb.checked;
     for (const mod of catMods) {
-      mod.active = turnOn;
+      if (noLoad) mod.parked = turnOn && !mod.missing;
+      else mod.active = turnOn;
     }
     syncModCategories();
     persistConfig();
@@ -2190,7 +2205,7 @@ function createColumn(catId, name, color, globalOrder) {
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
     headerRow1.append(headerSpacer(), deleteBtn);
-    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
+    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, headerSpacer(), headerNoLoadButton(catId), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   } else {
@@ -2200,7 +2215,7 @@ function createColumn(catId, name, color, globalOrder) {
 
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
-    headerRow2.append(headerCb, ...headerMoveButtons(catId), minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
+    headerRow2.append(headerCb, ...headerMoveButtons(catId), minimizeBtn, headerSpacer(), headerNoLoadButton(catId), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   }
@@ -2289,9 +2304,19 @@ function createModCard(mod, catColor, globalOrder) {
   cbWrap.className = 'card-checkbox';
   const cb = document.createElement('input');
   cb.type = 'checkbox';
-  cb.checked = mod.active;
+  // In a 🚫 category the box says whether the mod is on once it leaves (it doesn't load here).
+  const parkedHere = !mod.missing && catNoLoad(mod.category);
+  cb.checked = parkedHere ? !!mod.parked : mod.active;
+  if (parkedHere) { cbWrap.classList.add('km-parked'); cb.title = t('noLoad.parkedTip'); }
   cb.addEventListener('change', (e) => {
     e.stopPropagation();
+    if (catNoLoad(mod.category) && !mod.missing) {
+      const targets = selectedMods.has(mod.filename) ? mods.filter((m) => selectedMods.has(m.filename) && !m.missing && catNoLoad(m.category)) : [mod];
+      for (const m of targets) m.parked = cb.checked;
+      persistConfig();
+      renderColumns();
+      return;
+    }
     toggleModActive(mod);
   });
   cb.addEventListener('click', (e) => e.stopPropagation());
@@ -3017,6 +3042,11 @@ savePackBtn.addEventListener('click', async () => {
     order: [...actualOrder],
     pins: [...pins],
     uncatPos: uncatPos(),
+    uncatNoLoad: config.uncatNoLoad === true, // 🚫 (the other categories carry theirs)
+    parked: parkedKeys(),
+    // sort rules: the default and Uncategorized's (the other categories carry theirs)
+    sortDefault: structuredClone(config.sortDefault ?? null),
+    uncatSort: structuredClone(config.uncatSort ?? null),
   };
 
   await window.api.savePack(pack);
@@ -3091,12 +3121,17 @@ async function applyPack(pack) {
     // more pins where mods came or went since)
     const placement = new Map(pack.placement);
     const active = new Set(pack.active || []);
+    const parked = new Set(pack.parked || []);
     for (const mod of mods) {
       mod.category = placement.get(layoutKeyOf(mod)) || UNCATEGORIZED;
       if (mod.category !== UNCATEGORIZED && !categories.some((c) => c.id === mod.category)) mod.category = UNCATEGORIZED;
       mod.active = active.has(layoutKeyOf(mod));
+      mod.parked = parked.has(layoutKeyOf(mod));
     }
     if (Number.isInteger(pack.uncatPos)) config.uncatPos = pack.uncatPos;
+    if (typeof pack.uncatNoLoad === 'boolean') config.uncatNoLoad = pack.uncatNoLoad;
+    if ('sortDefault' in pack) { if (pack.sortDefault) config.sortDefault = structuredClone(pack.sortDefault); else delete config.sortDefault; }
+    if ('uncatSort' in pack) { if (pack.uncatSort) config.uncatSort = structuredClone(pack.uncatSort); else delete config.uncatSort; }
     syncModCategories();
     pins = new Set(pack.pins || []);
     adoptOrder(pack.order || [], true);

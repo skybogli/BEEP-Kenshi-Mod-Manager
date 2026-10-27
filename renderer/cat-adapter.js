@@ -38,6 +38,9 @@ const CM = {
   },
   moveTo: (id, to) => moveCategoryTo(id, to),
   remove: (id) => deleteCategory(id),
+  // 🚫 a category that doesn't load (editing.js)
+  noLoad: (id) => catNoLoad(id),
+  setNoLoad: (id, on) => setCatNoLoad(id, on),
   focusedCat: () => {
     const id = editFocus?.area === 'cat' ? editFocus.cat : lastClickedMod?.category;
     if (!id || !catById(id)) return null;

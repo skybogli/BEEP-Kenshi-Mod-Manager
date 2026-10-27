@@ -42,7 +42,7 @@
 
   "tabs.guide": "模组指南",
   "tabs.workshop": "创意工坊",
-  "tabs.packs": "模组包",
+  "tabs.packs": "预设",
   "tabs.tutorial": "教程",
   "tabs.details": "详情",
   "tabs.modPage": "模组页面",
@@ -88,7 +88,7 @@
   "modal.gotIt": "知道了",
   "modal.later": "稍后",
 
-  "packs.title": "模组包",
+  "packs.title": "预设",
   "packs.saveCurrent": "保存当前配置",
   "packs.savePrompt": "将模组包保存为：",
   "packs.loadConfirm": "加载模组包 \"{name}\"？这将替换你当前的分类和加载顺序。",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP 帮助你将 Kenshi 模组整理到以列形式显示的分类中。加载顺序从左到右、从上到下读取。首次启动时会保留你现有的 mods.cfg 加载顺序。",
   "tutorial.sortingMods": "模组排序",
   "tutorial.categories": "分类管理",
-  "tutorial.modPacks": "模组包",
+  "tutorial.modPacks": "预设",
   "tutorial.importExport": "导入与导出",
   "tutorial.conflictDetection": "冲突检测",
   "tutorial.otherFeatures": "其他功能",

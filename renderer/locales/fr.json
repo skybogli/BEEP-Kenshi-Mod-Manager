@@ -42,7 +42,7 @@
 
   "tabs.guide": "Guide de modding",
   "tabs.workshop": "Workshop",
-  "tabs.packs": "Packs",
+  "tabs.packs": "Préréglages",
   "tabs.tutorial": "Tutoriel",
   "tabs.details": "Détails",
   "tabs.modPage": "Page du mod",
@@ -88,7 +88,7 @@
   "modal.gotIt": "Compris",
   "modal.later": "Plus tard",
 
-  "packs.title": "Packs de mods",
+  "packs.title": "Préréglages",
   "packs.saveCurrent": "Sauvegarder l'actuel",
   "packs.savePrompt": "Sauvegarder le pack de mods sous :",
   "packs.loadConfirm": "Charger le pack de mods \"{name}\" ? Cela remplacera vos catégories et votre ordre de chargement actuels.",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP vous aide à organiser vos mods Kenshi en catégories affichées sous forme de colonnes. L'ordre de chargement se lit de gauche à droite, de haut en bas. Votre ordre de chargement mods.cfg existant est conservé au premier lancement.",
   "tutorial.sortingMods": "Tri des mods",
   "tutorial.categories": "Catégories",
-  "tutorial.modPacks": "Packs de mods",
+  "tutorial.modPacks": "Préréglages",
   "tutorial.importExport": "Import et export",
   "tutorial.conflictDetection": "Détection des conflits",
   "tutorial.otherFeatures": "Autres fonctionnalités",

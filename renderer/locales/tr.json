@@ -42,7 +42,7 @@
 
   "tabs.guide": "Modlama Rehberi",
   "tabs.workshop": "Workshop",
-  "tabs.packs": "Paketler",
+  "tabs.packs": "Ön ayarlar",
   "tabs.tutorial": "Eğitim",
   "tabs.details": "Ayrıntılar",
   "tabs.modPage": "Mod Sayfası",
@@ -88,7 +88,7 @@
   "modal.gotIt": "Anladım",
   "modal.later": "Sonra",
 
-  "packs.title": "Mod Paketleri",
+  "packs.title": "Ön ayarlar",
   "packs.saveCurrent": "Mevcut Durumu Kaydet",
   "packs.savePrompt": "Mod paketini farklı kaydet:",
   "packs.loadConfirm": "\"{name}\" mod paketi yüklensin mi? Bu işlem mevcut kategorilerinizin ve yükleme sıranızın yerini alacaktır.",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP, Kenshi modlarınızı sütunlar halinde görüntülenen kategorilere ayırmanıza yardımcı olur. Yükleme sırası soldan sağa, yukarıdan aşağıya doğru okunur. İlk açılışta mevcut mods.cfg yükleme sıranız korunur.",
   "tutorial.sortingMods": "Modları Sıralama",
   "tutorial.categories": "Kategoriler",
-  "tutorial.modPacks": "Mod Paketleri",
+  "tutorial.modPacks": "Ön ayarlar",
   "tutorial.importExport": "İçe ve Dışa Aktarma",
   "tutorial.conflictDetection": "Çakışma Algılama",
   "tutorial.otherFeatures": "Diğer Özellikler",

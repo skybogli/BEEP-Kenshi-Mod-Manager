@@ -34,6 +34,11 @@ Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) ·
 - **Review window**: check and edit translations line by line, add them to the glossary; recent files on the left, older ones grouped by mod, search.
 - Target language follows the app language and can be changed in its settings; Korean / English UI.
 
+### 🚫 Categories that don't load
+- Any category (Uncategorized too) can be set not to load: its 🚫 button or right-click → *Don't load*. Its mods stay out of mods.cfg whatever their check box; the box then says whether the mod is on once it leaves the category (moving it out turns it back on).
+- A new setup starts with Uncategorized not loading, so newly subscribed mods stay out of the game until you sort them. (If mods that are on already sit in Uncategorized at the first start, it keeps loading; existing setups are unchanged.)
+- The setting goes with exported lists / share strings, mod packs and undo.
+
 ### Editing tweaks
 - Explorer-style Shift / Ctrl selection; selections in other categories are kept.
 - Fold buttons on the panel resize bars; moving a category with the keyboard scrolls it into view.
@@ -85,7 +90,7 @@ Original project: [GitHub](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) ·
 - **Export List** — Save your full setup (categories, load order, active/inactive state) to a shareable text file.
 - **Import List (BEEP format)** — Restore categories, ordering, and active state from a BEEP export file.
 - **Import List (generic)** — Import a plain list of .mod filenames to reorder uncategorized mods.
-- **Mod Packs** — Save and load complete mod configurations. Great for switching between playthroughs or backing up before AI sort.
+- **Presets** — Save and load the whole setup: on/off, category layout and mod order, the actual load order (📌 priority), 🚫 don't-load and sort rules. Great for switching between playthroughs or backing up before AI sort.
 
 ### AI-Assisted Sorting
 - **AI Sort Export** — Fetches Steam Workshop descriptions and builds a text file for AI chatbots.

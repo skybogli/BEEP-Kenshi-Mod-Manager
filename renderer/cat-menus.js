@@ -186,6 +186,8 @@ function categoryMenu(catId, x, y) {
     { heading: CM.name(catId) },
     editable && { text: '✎ ' + CM.t('cm.rename'), fn: () => CM.rename(catId) },
     editable && CM.pickColor && { text: '🎨 ' + CM.t('cm.color'), fn: () => CM.pickColor(catId) },
+    // (an app with categories that can be kept from loading)
+    CM.noLoad && { text: '🚫 ' + CM.t('cm.noLoad'), check: CM.noLoad(catId), tip: CM.t('cm.noLoadTip'), fn: () => CM.setNoLoad(catId, !CM.noLoad(catId)) },
     'sep',
     { heading: CM.sortState(catId) },
     { text: '⇅ ' + CM.t('sortRule.openSettings'), fn: () => CM.sortSettings(catId) },

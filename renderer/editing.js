@@ -304,6 +304,75 @@ function enforceOneCopy() {
   config.dupActive = dup;
 }
 
+// ===== Categories that don't load (🚫) =====
+// A category can be set not to load: its mods stay off (out of mods.cfg and the actual order)
+// whatever their check box, and whether they were on is kept (mod.parked) for when they leave
+// it. Uncategorized's switch is config.uncatNoLoad (on for a new setup), the others' cat.noLoad.
+
+let newSetup = false; // the folder setup just ran (app.js)
+let noLoadNotice = false;
+
+function catNoLoad(catId) {
+  return catId === UNCATEGORIZED ? config?.uncatNoLoad === true : !!catById(catId)?.noLoad;
+}
+
+// Called at every render and save: mods in a 🚫 category go off (remembered), mods that left
+// one come back on (unless another copy of the name is on now).
+function applyNoLoad() {
+  for (const m of mods) {
+    if (m.missing) continue;
+    if (catNoLoad(m.category)) {
+      if (m.active) { m.active = false; m.parked = true; }
+    } else if (m.parked) {
+      m.parked = false;
+      if (!mods.some((o) => o !== m && o.active && o.realFile === m.realFile)) m.active = true;
+    }
+  }
+}
+
+function parkedKeys() {
+  return mods.filter((m) => m.parked).map(layoutKeyOf);
+}
+
+function setNoLoadFlag(catId, on) {
+  if (catId === UNCATEGORIZED) { if (config) config.uncatNoLoad = !!on; return; }
+  const c = catById(catId);
+  if (c && categories.includes(c)) { if (on) c.noLoad = true; else delete c.noLoad; }
+}
+
+function setCatNoLoad(catId, on) {
+  setNoLoadFlag(catId, on);
+  applyNoLoad();
+  syncModCategories();
+  persistConfig();
+  renderColumns();
+  setStatus(t(on ? 'noLoad.on' : 'noLoad.off', { name: catById(catId)?.name || '' }), 'success');
+}
+
+function headerNoLoadButton(catId) {
+  const on = catNoLoad(catId);
+  const b = document.createElement('span');
+  b.className = 'column-move-btn km-noload-btn' + (on ? ' on' : '');
+  b.textContent = '🚫';
+  b.title = t(on ? 'noLoad.tipOn' : 'noLoad.tipOff');
+  b.addEventListener('click', (e) => { e.stopPropagation(); setCatNoLoad(catId, !catNoLoad(catId)); });
+  return b;
+}
+
+// Called by loadMods() before the load order is set up: who was on before going into a 🚫
+// category, and Uncategorized's switch the first time. A new setup gets a 🚫 Uncategorized
+// unless mods that are on already sit there (they'd drop out of the game); an older config keeps
+// Uncategorized loading.
+function initNoLoad() {
+  const parked = new Set(config.parked || []);
+  for (const m of mods) m.parked = parked.has(layoutKeyOf(m));
+  if (typeof config.uncatNoLoad !== 'boolean') {
+    const onThere = mods.some((m) => m.active && !m.missing && m.category === UNCATEGORIZED);
+    config.uncatNoLoad = newSetup && !onThere;
+    noLoadNotice = newSetup && onThere;
+  }
+}
+
 // ===== Detail panel: Steam page / folders / tags =====
 
 const STEAM_WORKSHOP_URL = 'https://steamcommunity.com/app/233860/workshop/';
@@ -1940,8 +2009,10 @@ function exportDataLine(list = mods, o = EXPORT_ALL) {
   const ws = {};
   for (const m of list) { const id = m.missing ? ghostWorkshopId(m.realFile) : workshopIdOf(m); if (id) ws[m.realFile] = id; }
   const files = new Set(list.map((m) => m.realFile));
+  // 🚫 categories by name (Uncategorized as 'Uncategorized'), when the categories come along
+  const noLoad = o.cats ? orderedCatIds().filter(catNoLoad).map((id) => (id === UNCATEGORIZED ? 'Uncategorized' : catById(id).name)) : [];
   return EXPORT_DATA_PREFIX + JSON.stringify({
-    v: 1, savedAt: Date.now(), scope: o.scope, ...(o.cats ? {} : { noCats: true }),
+    v: 1, savedAt: Date.now(), scope: o.scope, ...(o.cats ? { noLoad } : { noCats: true }),
     ...(o.pins ? { order: loadOrderFiles().filter((f) => files.has(f)) } : {}), ws,
   });
 }
@@ -1978,6 +2049,7 @@ function parseImportText(content) {
   // Exported without categories: one plain list ("Mods only").
   if (data.noCats) src.cats = null;
   src.scope = data.scope || null;
+  src.noLoad = Array.isArray(data.noLoad) ? data.noLoad : null; // 🚫 categories (older files: none said)
   return src.entries.length ? src : null;
 }
 
@@ -2405,7 +2477,8 @@ async function applyImport(src, opts = {}) {
     if (kind) marks.set(it.key, kind);
   }
   // On / off of the mods I have (with the keep / turn-on options).
-  const setOn = (mod, entry) => { mod.active = importWantsOn(mod, entry, o); };
+  // (what it had kept in a 🚫 category goes: the file says now; applyNoLoad keeps it off there)
+  const setOn = (mod, entry) => { mod.active = importWantsOn({ active: mod.active || !!mod.parked }, entry, o); mod.parked = false; };
   if (o.place === 'file' && src.cats) {
     // The sender's categories, placement and on/off…
     for (const cat of src.cats) {
@@ -2419,6 +2492,8 @@ async function applyImport(src, opts = {}) {
         }
         catId = c.id;
       }
+      // 🚫 as in the file (an older file says nothing: mine stay as they are)
+      if (src.noLoad) setNoLoadFlag(catId, src.noLoad.includes(catId === UNCATEGORIZED ? 'Uncategorized' : cat.name));
       modOrders[catId] = [];
       for (const e of cat.files) {
         const mod = findImported(e);
@@ -4247,8 +4322,10 @@ function selectedModList() {
 function toggleSelected() {
   const list = selectedModList();
   if (!list.length) return;
-  const turnOn = list.some((m) => !m.active);
-  for (const m of list) m.active = turnOn;
+  // (in a 🚫 category it's the on kept for when the mod leaves)
+  const parkedHere = (m) => !m.missing && catNoLoad(m.category);
+  const turnOn = list.some((m) => !(parkedHere(m) ? m.parked : m.active));
+  for (const m of list) { if (parkedHere(m)) m.parked = turnOn; else m.active = turnOn; }
   commitLayout();
   setStatus(t(turnOn ? 'keys.turnedOn' : 'keys.turnedOff', { count: list.length }), 'success');
 }

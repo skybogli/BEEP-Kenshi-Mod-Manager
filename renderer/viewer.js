@@ -343,6 +343,7 @@ if (!window.api.vwId) {
       for (const m of list) {
         if (m.missing) { delete ghostStore()[m.realFile]; delete modCategories[m.filename]; continue; }
         m.active = false;
+        m.parked = false;
         moveMod(m, POOL, null, true);
       }
       selectedMods.clear();
@@ -411,7 +412,7 @@ if (!window.api.vwId) {
     // ---- after every drawing: pool mods stay off, marks, the bar, the title ----
     const _render = renderColumns;
     renderColumns = function (...args) {
-      for (const m of mods) if (poolMod(m) && m.active) m.active = false;
+      for (const m of mods) if (poolMod(m)) { m.active = false; m.parked = false; }
       const r = _render.apply(this, args);
       drawPool();
       // the count by the title: the file's mods only (not my others in the hidden column)

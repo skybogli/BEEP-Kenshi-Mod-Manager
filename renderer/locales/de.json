@@ -42,7 +42,7 @@
 
   "tabs.guide": "Modding-Anleitung",
   "tabs.workshop": "Workshop",
-  "tabs.packs": "Pakete",
+  "tabs.packs": "Voreinstellungen",
   "tabs.tutorial": "Tutorial",
   "tabs.details": "Details",
   "tabs.modPage": "Mod-Seite",
@@ -88,7 +88,7 @@
   "modal.gotIt": "Verstanden",
   "modal.later": "Später",
 
-  "packs.title": "Mod-Pakete",
+  "packs.title": "Voreinstellungen",
   "packs.saveCurrent": "Aktuelles speichern",
   "packs.savePrompt": "Mod-Paket speichern als:",
   "packs.loadConfirm": "Mod-Paket \"{name}\" laden? Dies ersetzt deine aktuellen Kategorien und die Ladereihenfolge.",
@@ -165,7 +165,7 @@
   "tutorial.gettingStartedText": "BEEP hilft dir, deine Kenshi-Mods in Kategorien zu organisieren, die als Spalten dargestellt werden. Die Ladereihenfolge wird von links nach rechts, von oben nach unten gelesen. Deine bestehende mods.cfg-Ladereihenfolge wird beim ersten Start beibehalten.",
   "tutorial.sortingMods": "Mods sortieren",
   "tutorial.categories": "Kategorien",
-  "tutorial.modPacks": "Mod-Pakete",
+  "tutorial.modPacks": "Voreinstellungen",
   "tutorial.importExport": "Import & Export",
   "tutorial.conflictDetection": "Konflikterkennung",
   "tutorial.otherFeatures": "Weitere Funktionen",
