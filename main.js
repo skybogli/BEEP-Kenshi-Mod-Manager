@@ -1,5 +1,17 @@
-const { app, BrowserWindow, ipcMain, dialog, shell } = require('electron');
+/**
+ * -------------------------------------------------------------------
+ * BEEP Kenshi Mod Manager - Enhanced Edition (편의 기능 및 번역 도구 추가 버전)
+ *
+ * 이 프로젝트는 Derthi의 원본 소프트웨어를 기반으로 수정 및 확장되었습니다.
+ * -------------------------------------------------------------------
+ * Original Work Copyright (c) 2026 Derthi (MIT License)
+ * Modified Work Copyright (c) 2026 skybogli (MIT License)
+ * -------------------------------------------------------------------
+ */
+const { app, BrowserWindow, ipcMain, dialog, shell, Menu, clipboard } = require('electron');
 const path = require('path');
+const windowState = require('./lib/window-state');
+const rekenshi = require('./lib/rekenshi');
 const configStore = require('./lib/config-store');
 const modDiscovery = require('./lib/mod-discovery');
 const loadOrder = require('./lib/load-order');
@@ -8,16 +20,144 @@ const steamApi = require('./lib/steam-api');
 const conflictDetector = require('./lib/conflict-detector');
 const updater = require('./lib/updater');
 const zoneDiff = require('./lib/zone-diff');
+const translate = require('./lib/translate');
+const kmt = require('./lib/kmt/service');
+const listViewer = require('./lib/list-viewer');
 
 let mainWindow;
+// The menu bar always shows unless turned off in View (config.menuBarFixed = false).
+let menuBarFixed = true;
+
+function setMenuBarFixed(fixed) {
+  menuBarFixed = fixed;
+  if (!mainWindow) return;
+  mainWindow.setAutoHideMenuBar(!fixed);
+  mainWindow.setMenuBarVisibility(fixed);
+  mainWindow.webContents.send('menu-bar-changed', fixed);
+}
+let allowClose = false;
+let closeAcked = false;
+
+ipcMain.handle('close-ack', () => { closeAcked = true; });
+ipcMain.handle('close-now', () => {
+  allowClose = true;
+  mainWindow.close();
+});
+// Detail panel folder buttons.
+ipcMain.handle('open-folder', async (_event, dir) => {
+  if (!dir || !require('fs').existsSync(dir)) return 'not found';
+  return shell.openPath(dir);
+});
+// Detail panel: open a .mod file in the Forgotten Construction Set (the game's mod editor).
+ipcMain.handle('open-in-fcs', (_event, gamePath, file) => {
+  const fs = require('fs');
+  const exe = gamePath ? path.join(gamePath, 'forgotten construction set.exe') : '';
+  if (!exe || !fs.existsSync(exe)) return 'no-fcs';
+  if (!file || !fs.existsSync(file)) return 'no-file';
+  const child = require('child_process').spawn(exe, [file], { cwd: gamePath, detached: true, stdio: 'ignore' });
+  child.on('error', () => {});
+  child.unref();
+  return 'ok';
+});
+// Del key: move mod folders to the Recycle Bin. Only a folder directly inside the game's
+// Mods folder or the Workshop content folder is removed (otherwise just the .mod file);
+// a Workshop mod's link in the Mods folder goes too.
+ipcMain.handle('delete-mod-files', async (_event, { gamePath, steamModsPath, mods }) => {
+  const fs = require('fs');
+  const norm = (p) => path.resolve(p).toLowerCase();
+  const roots = [gamePath && path.join(gamePath, 'Mods'), steamModsPath].filter(Boolean).map(norm);
+  const deleted = [];
+  const errors = [];
+  for (const mod of mods) {
+    try {
+      const folder = path.dirname(mod.filePath);
+      if (!roots.includes(norm(path.dirname(folder)))) throw new Error('not in the Mods / Workshop folder: ' + folder);
+      const files = fs.readdirSync(folder).filter((f) => f.toLowerCase().endsWith('.mod'));
+      // Set aside (undoable), to the Recycle Bin when the app closes: the folder, or just the
+      // .mod file when the folder holds others too; a Workshop mod's link in Mods too.
+      const items = [files.length > 1 ? { path: mod.filePath, mode: 'suffix' } : { path: folder, mode: 'hold' }];
+      if (mod.source === 'steam' && gamePath) {
+        const link = path.join(gamePath, 'Mods', getModLinkName(mod.realFile));
+        try { if (fs.lstatSync(link).isSymbolicLink()) items.push({ path: link, mode: 'hold' }); } catch { /* no link */ }
+      }
+      const r = softDel.hide(items);
+      if (r.errors.length) throw new Error(r.errors[0].error);
+      deleted.push({ filePath: mod.filePath, moved: r.moved });
+    } catch (err) {
+      errors.push({ filePath: mod.filePath, error: err.message });
+    }
+  }
+  return { deleted, errors };
+});
+// View → Actual size / Zoom in / Zoom out. Fixed steps so the size reads as a round %;
+// the renderer keeps the size in its config and sets it again at start.
+const ZOOM_STEPS = [0.5, 0.67, 0.75, 0.8, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2];
+function setZoom(factor) {
+  if (!mainWindow) return;
+  const f = Math.max(ZOOM_STEPS[0], Math.min(ZOOM_STEPS[ZOOM_STEPS.length - 1], factor));
+  mainWindow.webContents.setZoomFactor(f);
+  mainWindow.webContents.send('zoom-changed', f);
+}
+function stepZoom(dir) {
+  if (!mainWindow) return;
+  const now = mainWindow.webContents.getZoomFactor();
+  const next = dir > 0 ? ZOOM_STEPS.find((s) => s > now + 0.001) : [...ZOOM_STEPS].reverse().find((s) => s < now - 0.001);
+  setZoom(next ?? now);
+}
+// Settings reset: view size 100%, menu bar shown, then a fresh start of the page.
+ipcMain.handle('reset-window', () => {
+  // Not setMenuBarFixed(): its notice would make the page save its old settings again.
+  menuBarFixed = true;
+  if (mainWindow) {
+    mainWindow.webContents.setZoomFactor(1);
+    mainWindow.setAutoHideMenuBar(false);
+    mainWindow.setMenuBarVisibility(true);
+  }
+  setTimeout(() => mainWindow?.webContents.reload(), 50);
+});
+ipcMain.handle('set-zoom', (_event, factor) => {
+  if (mainWindow && Number(factor) > 0) mainWindow.webContents.setZoomFactor(Math.max(0.5, Math.min(2, Number(factor))));
+});
+// Detail panel copy icons.
+ipcMain.handle('copy-text', (_event, text) => clipboard.writeText(String(text || '')));
+ipcMain.handle('read-text', () => clipboard.readText());
+
+// A mod list as one string (lib/list-string.js): the file's bytes in, the same bytes out.
+const listString = require('./lib/list-string');
+const listStringError = (e) => (e instanceof listString.ListStringError ? { error: e.code, game: e.game } : { error: 'zlib' });
+ipcMain.handle('list-str-encode', (_event, text) => listString.encode(Buffer.from(String(text), 'utf8')));
+ipcMain.handle('list-str-looks', (_event, text) => listString.looksLike(text));
+ipcMain.handle('list-str-decode', (_event, text) => {
+  try { return { text: listString.decode(text).toString('utf8') }; } catch (e) { return listStringError(e); }
+});
+// the restored file, where the user says (never over a file by itself)
+ipcMain.handle('list-str-save', async (event, text, defaultName) => {
+  let bytes;
+  try { bytes = listString.decode(text); } catch (e) { return listStringError(e); }
+  const r = await dialog.showSaveDialog(BrowserWindow.fromWebContents(event.sender) || mainWindow, {
+    defaultPath: path.join(app.getPath('documents'), defaultName || 'BEEP-mod-list.txt'),
+    filters: [{ name: 'Text Files', extensions: ['txt'] }],
+  });
+  if (r.canceled || !r.filePath) return { canceled: true };
+  try { require('fs').writeFileSync(r.filePath, bytes); } catch (e) { return { error: 'save', message: e.message }; }
+  return { path: r.filePath };
+});
+// Edit-menu Cut / Paste / Select All inside a text field.
+ipcMain.handle('native-edit', (event, command) => {
+  if (['cut', 'copy', 'paste', 'selectAll'].includes(command)) event.sender[command]();
+});
 
 function createWindow() {
+  // Last run's size and place (brought back onto a screen if it's off one); first run 1280 × 800.
+  const place = windowState.initialBounds(app);
   mainWindow = new BrowserWindow({
-    width: 1000,
-    height: 700,
+    ...(place.x !== undefined ? { x: place.x, y: place.y } : {}),
+    width: place.width,
+    height: place.height,
     show: false,
     icon: path.join(__dirname, 'icon.ico'),
     backgroundColor: '#18181e',
+    autoHideMenuBar: !menuBarFixed,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       nodeIntegration: false,
@@ -26,7 +166,33 @@ function createWindow() {
     },
   });
 
-  mainWindow.once('ready-to-show', () => mainWindow.show());
+  mainWindow.once('ready-to-show', () => {
+    if (place.maximized) mainWindow.maximize();
+    mainWindow.show();
+  });
+  windowState.track(mainWindow, app);
+
+  // Closing asks the page first (it may have unsaved load order changes). If the page
+  // doesn't answer quickly (crashed or still loading), close anyway.
+  mainWindow.webContents.on('render-process-gone', () => { allowClose = true; });
+  mainWindow.on('close', (e) => {
+    if (allowClose) return;
+    e.preventDefault();
+    // Open list windows (내보내기 파일 보기) close first, each asking about its own changes.
+    if (listViewer.count()) {
+      listViewer.closeAll().then((ok) => { if (ok && mainWindow && !mainWindow.isDestroyed()) mainWindow.close(); });
+      return;
+    }
+    closeAcked = false;
+    kmt.stepAside(); // the translator window off the question the page may ask
+    mainWindow.webContents.send('confirm-close');
+    setTimeout(() => {
+      if (!closeAcked && !allowClose) {
+        allowClose = true;
+        mainWindow.close();
+      }
+    }, 2000);
+  });
   mainWindow.loadFile(path.join(__dirname, 'renderer', 'index.html'));
 
   // Any window.open(url) opens in the user's real browser, never a blank Electron window
@@ -89,6 +255,11 @@ ipcMain.handle('fetch-workshop-details', (_event, workshopIds) => {
   return steamApi.fetchWorkshopDetails(workshopIds);
 });
 
+// Google Translate (detail panel)
+ipcMain.handle('translate-texts', (_event, texts, sourceLang, targetLang) => {
+  return translate.translateTexts(texts, sourceLang, targetLang);
+});
+
 // Mod database
 ipcMain.handle('load-mod-database', () => {
   const fs = require('fs');
@@ -138,7 +309,8 @@ ipcMain.handle('write-file', (_event, filePath, content) => {
 });
 
 // Launch game
-ipcMain.handle('launch-game', (_event, gamePath) => {
+// mode: 'rekenshi' (RE_Kenshi's own exe) or 'vanilla' (--norekenshi); lib/rekenshi.js.
+ipcMain.handle('launch-game', (_event, gamePath, mode) => {
   const fs = require('fs');
   const { spawn } = require('child_process');
 
@@ -152,6 +324,7 @@ ipcMain.handle('launch-game', (_event, gamePath) => {
   if (!exePath) {
     return { success: false, error: 'Could not find Kenshi executable in ' + gamePath };
   }
+  const run = rekenshi.launchSpec(gamePath, mode, exePath);
 
   if (process.platform === 'linux') {
     // On Linux, launch via Steam (Proton) or directly with Wine
@@ -161,14 +334,18 @@ ipcMain.handle('launch-game', (_event, gamePath) => {
     exec(`xdg-open "${steamRunUrl}"`, { timeout: 5000 }, (err) => {
       if (err) {
         // Fallback: try running the exe directly (may work under Wine/Proton)
-        spawn('wine', [exePath], { detached: true, cwd: gamePath, stdio: 'ignore' }).unref();
+        spawn('wine', [run.exe, ...run.args], { detached: true, cwd: gamePath, stdio: 'ignore' }).unref();
       }
     });
   } else {
-    spawn(exePath, [], { detached: true, cwd: gamePath, stdio: 'ignore' }).unref();
+    const child = spawn(run.exe, run.args, { detached: true, cwd: run.cwd, env: run.env, stdio: 'ignore' });
+    child.on('error', () => {});
+    child.unref();
   }
   return { success: true };
 });
+
+ipcMain.handle('rekenshi-status', (_event, gamePath) => rekenshi.status(gamePath));
 
 // Launch FCS
 ipcMain.handle('launch-fcs', (_event, gamePath) => {
@@ -369,7 +546,113 @@ ipcMain.handle('remove-mod-links', (_event, { gamePath, mods }) => {
   return { removed, skipped, errors };
 });
 
-app.whenReady().then(createWindow);
+// Window menu. Electron's default menu is English-only, so the renderer sends
+// the labels in the UI language and the menu is rebuilt with them.
+function buildAppMenu(labels = {}) {
+  const l = (key, fallback) => labels[key] || fallback;
+  const open = (url) => () => shell.openExternal(url);
+  // Undo/redo go to the renderer, which undoes mod moves (or text edits in a
+  // text field). The keys are only shown here; the renderer handles them.
+  const send = (command) => () => mainWindow?.webContents.send('menu-command', command);
+  // Items: { label, command } | null (separator) | { heading } (grey) | { label, sub: items }.
+  const menuItem = (it) => (!it ? { type: 'separator' }
+    : it.heading ? { label: it.heading, enabled: false }
+    : it.sub ? { label: it.label, submenu: it.sub.map(menuItem) }
+    : { label: it.label, click: send(it.command) });
+  const template = [
+    { label: l('file', 'File'), submenu: labels.fileItems ? labels.fileItems.map(menuItem) : [
+      { role: 'quit', label: l('quit', 'Exit') },
+    ] },
+    // Edit items come from the renderer with their shortcuts written into the labels
+    // (Windows would name the keys in its own language); the renderer handles the keys.
+    { label: l('edit', 'Edit'), submenu: labels.editItems ? labels.editItems.map(menuItem) : [
+      { label: l('undo', 'Undo'), accelerator: 'CmdOrCtrl+Z', registerAccelerator: false, click: send('undo') },
+      { label: l('redo', 'Redo'), accelerator: 'CmdOrCtrl+Y', registerAccelerator: false, click: send('redo') },
+    ] },
+    ...(labels.moveItems ? [{ label: l('moveMenu', 'Move'), submenu: labels.moveItems.map(menuItem) }] : []),
+    { label: l('view', 'View'), submenu: [
+      { label: l('reload', 'Reload'), accelerator: 'CmdOrCtrl+R', click: send('reload') },
+      { role: 'forceReload', label: l('forceReload', 'Force Reload') },
+      { role: 'toggleDevTools', label: l('devTools', 'Toggle Developer Tools') },
+      { type: 'separator' },
+      { label: l('resetZoom', 'Actual Size'), accelerator: 'CmdOrCtrl+0', click: () => setZoom(1) },
+      { label: l('zoomIn', 'Zoom In'), accelerator: 'CmdOrCtrl+=', click: () => stepZoom(1) },
+      { label: l('zoomOut', 'Zoom Out'), accelerator: 'CmdOrCtrl+-', click: () => stepZoom(-1) },
+      // The same with Shift+= (the + key) and the number pad, not shown.
+      { label: 'zoom in +', accelerator: 'CmdOrCtrl+Shift+=', visible: false, click: () => stepZoom(1) },
+      { label: 'zoom in num', accelerator: 'CmdOrCtrl+numadd', visible: false, click: () => stepZoom(1) },
+      { label: 'zoom out num', accelerator: 'CmdOrCtrl+numsub', visible: false, click: () => stepZoom(-1) },
+      { label: 'actual size num', accelerator: 'CmdOrCtrl+num0', visible: false, click: () => setZoom(1) },
+      { type: 'separator' },
+      { role: 'togglefullscreen', label: l('fullscreen', 'Toggle Full Screen') },
+      { type: 'separator' },
+      // On: the menu bar always shows; off: it hides and Alt shows it.
+      { label: l('menuBar', 'Always Show Menu Bar'), type: 'checkbox', checked: menuBarFixed, click: (item) => setMenuBarFixed(item.checked) },
+    ] },
+    { label: l('window', 'Window'), submenu: [
+      { role: 'minimize', label: l('minimize', 'Minimize') },
+      { label: l('zoom', 'Maximize / Restore'), accelerator: 'CmdOrCtrl+Shift+M', click: () => windowState.toggleMaximize(mainWindow) },
+      { type: 'separator' },
+      // On: the next start opens the window as it was left; off: always the first-run window.
+      { label: l('rememberWindow', 'Remember Window Size and Position'), type: 'checkbox', checked: windowState.remembering(app), click: (item) => windowState.setRemember(mainWindow, app, item.checked) },
+      { type: 'separator' },
+      { role: 'close', label: l('close', 'Close') },
+    ] },
+    { label: l('help', 'Help'), submenu: [
+      ...(labels.helpItems || []).map(menuItem),
+      ...(labels.helpItems ? [{ type: 'separator' }] : []),
+      { label: l('github', 'GitHub Page'), click: open('https://github.com/Derthi/BEEP-Kenshi-Mod-Manager') },
+      { label: l('steamGuide', 'Steam Workshop Guide'), click: open('https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622') },
+      { label: l('discord', 'Discord'), click: open('https://discord.gg/QvFTmRKHSz') },
+    ] },
+  ];
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+}
+
+ipcMain.handle('set-app-menu', (_event, labels) => {
+  buildAppMenu(labels);
+});
+
+// Del with undo: files set aside, to the Recycle Bin when the app closes (lib/soft-delete.js).
+const softDel = require('./lib/soft-delete')(app.getPath('userData'), shell);
+ipcMain.handle('soft-delete', (_event, items) => softDel.hide(items || []));
+ipcMain.handle('soft-restore', (_event, moved) => softDel.restore(moved || []));
+// Steam's Workshop record: entries of mods whose folder is gone (lib/steam-workshop-record.js).
+const steamRecord = require('./lib/steam-workshop-record')(app.getPath('userData'));
+ipcMain.handle('steam-forget', (_event, { steamModsPath, ids }) => {
+  const fs = require('fs');
+  const r = steamRecord.forget(steamModsPath, ids);
+  r.present = steamModsPath ? (ids || []).filter((id) => /^\d+$/.test(id) && fs.existsSync(path.join(steamModsPath, id))) : [];
+  return r;
+});
+let softDelFinalized = false;
+app.on('before-quit', (e) => {
+  if (softDelFinalized || !softDel.pending()) return;
+  e.preventDefault();
+  softDelFinalized = true;
+  softDel.finalize().finally(() => app.quit());
+});
+
+app.whenReady().then(() => {
+  // A plain Kenshi start from last time that wasn't put back to RE_Kenshi yet.
+  rekenshi.restoreAtStart(app.getPath('userData'));
+  softDel.finalize(); // left from a crash
+  menuBarFixed = configStore.loadConfig(app.getPath('userData'))?.menuBarFixed !== false;
+  buildAppMenu();
+  createWindow();
+  // The translator (번역 · 패치 도구): its own window, opened from the mod menu / File menu.
+  kmt.setup({
+    userData: app.getPath('userData'),
+    icon: path.join(__dirname, 'icon.ico'),
+    gamePath: () => configStore.loadConfig(app.getPath('userData'))?.gamePath || '',
+    steamModsPath: () => configStore.loadConfig(app.getPath('userData'))?.steamModsPath || '',
+    lang: () => configStore.loadConfig(app.getPath('userData'))?.language || 'en',
+    mainWindow,
+  });
+  mainWindow.on('closed', () => kmt.close());
+  // An exported list in its own window (lib/list-viewer.js).
+  listViewer.setup({ mainWindow, userData: app.getPath('userData'), icon: path.join(__dirname, 'icon.ico'), loadConfig: () => configStore.loadConfig(app.getPath('userData')) });
+});
 
 app.on('window-all-closed', () => {
   app.quit();

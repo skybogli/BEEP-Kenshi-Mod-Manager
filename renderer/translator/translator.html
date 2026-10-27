@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'">
+  <title>번역 · 패치 도구</title>
+  <link rel="stylesheet" href="translator.css">
+</head>
+<body>
+  <!-- Words: translator-i18n.js (data-i18n = text, data-i18n-title = tooltip, data-i18n-ph = placeholder) -->
+  <header class="tr-head">
+    <div class="tr-title"><span id="title-main" data-i18n="app.title">번역 · 패치 도구</span> <span class="tr-sub">Kenshi Mod Translator</span></div>
+    <div class="tr-head-btns">
+      <button class="tr-icon-btn" id="btn-pin" data-i18n-title="head.pin">📌</button>
+      <button class="tr-btn tr-gear" id="btn-settings" data-i18n="head.settings" data-i18n-title="head.settingsTip">⚙ 설정</button>
+      <span class="tr-win-btns">
+        <button class="tr-win" id="btn-min" data-i18n-title="head.min">&#xE921;</button>
+        <button class="tr-win" id="btn-max" data-i18n-title="head.max">&#xE922;</button>
+        <button class="tr-win tr-win-close" id="btn-close" data-i18n-title="head.close">&#xE8BB;</button>
+      </span>
+    </div>
+  </header>
+
+  <main class="tr-main">
+    <section class="tr-top">
+      <div class="tr-box tr-mods-box">
+        <div class="tr-box-head">
+          <span class="tr-box-title" data-i18n="mods.title">작업할 모드</span>
+          <span class="tr-muted" id="mods-count"></span>
+          <span class="tr-grow"></span>
+          <button class="tr-btn tr-small" id="btn-add-mods" data-i18n="mods.add">모드 추가…</button>
+          <button class="tr-btn tr-small tr-hist" id="btn-undo" data-i18n-title="mods.undo" disabled><span class="tr-hist-icon">↶</span><span class="tr-count" id="undo-count"></span></button>
+          <button class="tr-btn tr-small tr-hist" id="btn-redo" data-i18n-title="mods.redo" disabled><span class="tr-hist-icon">↷</span><span class="tr-count" id="redo-count"></span></button>
+          <button class="tr-btn tr-small" id="btn-clear-mods" data-i18n="mods.clear" data-i18n-title="mods.clearTip">비우기</button>
+          <button class="tr-btn tr-small" id="btn-clear-all" data-i18n="mods.clearAll" data-i18n-title="mods.clearAllTip">모두 비우기</button>
+        </div>
+        <div class="tr-mods" id="mods-list" data-i18n-title="mods.listTip"></div>
+        <div class="tr-list-foot">
+          <div class="tr-list-grip hidden" id="list-grip" data-i18n-title="mods.grip"></div>
+          <button class="tr-mini hidden" id="btn-list-all" data-i18n-title="mods.showAll">⇕</button>
+        </div>
+      </div>
+      <div class="tr-box">
+        <div class="tr-box-title"><span data-i18n="mode.title">작업 방식</span><button class="tr-target" id="btn-target" data-i18n-title="mode.targetTip"></button></div>
+        <label class="tr-radio" data-i18n-title="mode.patchmodTip"><input type="radio" name="mode" value="patchmod"> <b id="mode-patchmod">한글화 패치모드 생성</b> <span class="tr-muted" data-i18n="mode.patchmodNote">(_KO, 원본은 그대로)</span></label>
+        <label class="tr-radio" data-i18n-title="mode.inplaceTip"><input type="radio" name="mode" value="inplace"> <b id="mode-inplace">원본 직접 한글화</b> <span class="tr-muted" data-i18n="mode.inplaceNote">(원본은 .bak 보관)</span></label>
+        <label class="tr-radio" data-i18n-title="mode.copypatchTip"><input type="radio" name="mode" value="copypatch"> <b data-i18n="mode.copypatch">항목 복사 패치 만들기</b> <span class="tr-muted" data-i18n="mode.copypatchNote">(_Patch, 번역 없음)</span></label>
+        <div class="tr-summary" id="settings-summary"></div>
+      </div>
+      <div class="tr-box tr-gloss-box">
+        <div class="tr-box-title" data-i18n="gloss.title">용어집</div>
+        <div class="tr-row">
+          <input class="tr-input" id="glossary-path" data-i18n-ph="gloss.ph" spellcheck="false">
+        </div>
+        <div class="tr-row">
+          <button class="tr-btn tr-small" id="btn-glossary-pick" data-i18n="common.find">찾기</button>
+          <button class="tr-btn tr-small" id="btn-glossary-open" data-i18n="common.open" data-i18n-title="gloss.openTip">열기</button>
+        </div>
+        <label class="tr-check" data-i18n-title="gloss.onlyTip"><input type="checkbox" id="glossary-only"> <span data-i18n="gloss.only">용어집 항목만 번역</span></label>
+        <div class="tr-box-title tr-mt" data-i18n="out.title">결과 위치</div>
+        <div class="tr-row">
+          <input class="tr-input" id="out-root" spellcheck="false">
+        </div>
+        <div class="tr-row">
+          <button class="tr-btn tr-small" id="btn-out-pick" data-i18n="common.find">찾기</button>
+          <button class="tr-btn tr-small" id="btn-out-open" data-i18n="common.open" data-i18n-title="out.openTip">열기</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="tr-actions">
+      <button class="tr-btn tr-primary" id="btn-start" data-i18n="act.start">▶ 작업 시작</button>
+      <button class="tr-btn tr-danger" id="btn-stop" data-i18n="act.stop" disabled>■ 중지</button>
+      <button class="tr-btn" id="btn-extract" data-i18n="act.extract" data-i18n-title="act.extractTip">번역 추출</button>
+      <div class="tr-progress"><div class="tr-progress-fill" id="progress-fill"></div><span class="tr-progress-text" id="progress-text"></span></div>
+      <button class="tr-btn" id="btn-review" data-i18n="act.review" data-i18n-title="act.reviewTip">번역 검수</button>
+      <button class="tr-btn" id="btn-restore" data-i18n="act.restore" data-i18n-title="act.restoreTip">되돌리기</button>
+    </section>
+
+    <section class="tr-box tr-log-box collapsed" id="log-box">
+      <div class="tr-box-head">
+        <button class="tr-fold" id="btn-log-fold" data-i18n-title="log.fold">▸</button>
+        <span class="tr-box-title tr-click" id="log-title" data-i18n="log.title">작업 로그</span>
+        <span class="tr-log-last" id="log-last"></span>
+        <span class="tr-grow"></span>
+        <span class="tr-log-tools">
+          <label class="tr-check tr-inline tr-open-only"><input type="checkbox" id="log-follow" checked> <span data-i18n="log.follow">끝 따라가기</span></label>
+          <button class="tr-btn tr-small" id="btn-log-copy" data-i18n="log.copy">복사</button>
+          <button class="tr-btn tr-small" id="btn-log-save" data-i18n="log.save">저장</button>
+          <button class="tr-btn tr-small tr-open-only" id="btn-log-clear" data-i18n="log.clear">지우기</button>
+        </span>
+      </div>
+      <pre class="tr-log" id="log"></pre>
+    </section>
+  </main>
+  <footer class="tr-foot" id="foot"></footer>
+
+  <div class="tr-overlay hidden" id="overlay"></div>
+  <!-- loading: shown until the window is ready, and while a page loads (BUSY in translator.js) -->
+  <div class="tr-busy" id="busy"><div class="tr-spin"></div><div class="tr-busy-text" id="busy-text"></div></div>
+  <div class="tr-menu hidden" id="menu"></div>
+  <script src="translator-i18n.js"></script>
+  <script src="translator.js"></script>
+  <script src="translator-guide.js"></script>
+  <script src="translator-dialogs.js"></script>
+  <script src="translator-review.js"></script>
+</body>
+</html>

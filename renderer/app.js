@@ -5,7 +5,6 @@ let config = null;
 let categories = []; // { id, name, color, order }
 let modCategories = {}; // filename -> categoryId
 let modOrders = {}; // categoryId -> [filename, ...]
-let contextTarget = null; // category id for context menu
 let verticalLayout = false;
 let conflictData = null; // { modConflicts, totalConflicts, parseErrors }
 let selectedMods = new Set(); // multi-select filenames
@@ -22,20 +21,35 @@ let linkedMods = new Set(); // steam mods with active symlinks in game folder
 
 const UNCATEGORIZED = 'uncategorized';
 
-// Check if a dependency is satisfied — uses case-insensitive substring matching
-// (same approach as Kenshi Mod Manager). Dep "Hats" matches filename "Hats.mod".
-// Only active mods count as satisfying a dependency.
+// Which mods a dependency name means. The name is matched to the mod's file name
+// exactly ("Hats" or "Hats.mod" -> Hats.mod); only when no mod has that exact name does
+// it fall back to a case-insensitive substring match (as Kenshi Mod Manager did). A plain
+// substring match alone would make "Blot Ration Packs" match "Storages for Blot Ration Packs".
+function depBaseName(name) {
+  return name.toLowerCase().replace(/\.mod$/, '');
+}
+
+function depCandidates(dep) {
+  const want = depBaseName(dep);
+  const real = mods.filter((m) => !m.missing); // placeholders for missing mods don't count
+  const exact = real.filter((m) => depBaseName(m.realFile) === want);
+  if (exact.length) return exact;
+  return real.filter((m) => m.realFile.toLowerCase().includes(dep.toLowerCase()));
+}
+
+// Check if a dependency is satisfied. Only active mods count by default.
 function isDepInstalled(dep, activeOnly = true) {
-  const depLower = dep.toLowerCase();
-  return mods.some((m) => {
-    if (activeOnly && !m.active) return false;
-    return m.filename.toLowerCase().includes(depLower);
-  });
+  return depCandidates(dep).some((m) => !activeOnly || m.active);
 }
 
 function findDepMod(dep) {
-  const depLower = dep.toLowerCase();
-  return mods.find((m) => m.filename.toLowerCase().includes(depLower));
+  const found = depCandidates(dep);
+  return found.find((m) => m.active) || found[0];
+}
+
+// Does `mod` list `target` as a dependency or reference?
+function needsMod(mod, target) {
+  return (mod.dependencies || []).concat(mod.references || []).some((d) => depCandidates(d).includes(target));
 }
 
 // ===== Modal Prompt (replaces window.prompt) =====
@@ -126,7 +140,6 @@ const saveBtn = document.getElementById('save-btn');
 const detailPanel = document.getElementById('detail-panel');
 const detailContent = document.getElementById('detail-content');
 const addCategoryBtn = document.getElementById('add-category-btn');
-const contextMenu = document.getElementById('context-menu');
 const colorPicker = document.getElementById('color-picker');
 
 // ===== Setup Screen =====
@@ -194,9 +207,15 @@ async function showMainScreen() {
 }
 
 async function loadMods() {
+  updateLaunchButton(); // RE_Kenshi there or not (the game folder may have changed)
   setStatus(t('status.loading'));
+  orderPanelKey = null; // dependencies may have changed: the load-order list is drawn anew (editing.js)
   try {
-    mods = await window.api.discoverMods(config);
+    // Copies with the same file name each get their own key (see editing.js).
+    BOOT.step(25, t('boot.scan'));
+    mods = assignModKeys(await window.api.discoverMods(config));
+    BOOT.step(60, t('boot.found', { count: mods.length }));
+    noteNewlyInstalled(); // ghost cards (editing.js) whose mod is there now
     applyCategoriesToMods();
 
     // Check symlink status for steam mods
@@ -205,7 +224,7 @@ async function loadMods() {
       try {
         const linkResult = await window.api.checkModLinks({
           gamePath: config.gamePath,
-          steamMods: steamMods.map(m => ({ filename: m.filename, filePath: m.filePath }))
+          steamMods: steamMods.map(m => ({ filename: m.realFile, filePath: m.filePath }))
         });
         linkedMods = new Set(linkResult.linkedMods);
       } catch {
@@ -228,15 +247,25 @@ async function loadMods() {
       modOrders[UNCATEGORIZED] = uncatMods.map((m) => m.filename);
     }
 
+    // mods.cfg as read is the actual order; pins explain where it differs from the categories.
+    const cfgOrder = [...new Set(mods.filter((m) => m.active && m.order >= 0).sort((a, b) => a.order - b.order).map((m) => m.filename))];
+    initLoadOrder(cfgOrder);
+
     selectedMod = null;
+    BOOT.step(85, t('boot.draw'));
     renderColumns();
     const activeCount = mods.filter((m) => m.active).length;
     modCount.textContent = t('modCount', { total: mods.length, active: activeCount });
 
     updateDepStatus();
+    resetHistoryBaseline();
+    // mods.cfg as read: what "unsaved changes" are measured against.
+    markSaved(cfgOrder);
+    forgetSteamRecords(); // Steam's record of Workshop mods whose folder is gone (editing.js)
   } catch (err) {
     setStatus(t('status.loadError', { error: err.message }), 'error');
   }
+  BOOT.done();
 }
 
 function applyCategoriesToMods() {
@@ -358,7 +387,7 @@ resizeHandle.addEventListener('mousedown', (e) => {
 document.addEventListener('mousemove', (e) => {
   if (!isResizing) return;
   const contentRect = document.querySelector('.content').getBoundingClientRect();
-  let newWidth = e.clientX - contentRect.left;
+  let newWidth = contentRect.right - e.clientX;
   if (newWidth < 100) newWidth = 100;
   if (newWidth > contentRect.width - 100) newWidth = contentRect.width - 100;
   detailPanel.style.width = newWidth + 'px';
@@ -408,12 +437,19 @@ document.addEventListener('mouseup', () => {
   }
 });
 
-// Horizontal scroll wheel support
+// Scroll wheel support: the wheel scrolls the category list under the cursor
+// vertically; over a header, a list with nothing to scroll, or with Shift held,
+// it scrolls the columns horizontally instead.
 columnsContainer.addEventListener('wheel', (e) => {
-  if (!verticalLayout) {
+  if (verticalLayout) return;
+  const list = e.shiftKey ? null : e.target.closest('.column-mods');
+  if (list && list.scrollHeight > list.clientHeight) {
     e.preventDefault();
-    columnsContainer.scrollLeft += e.deltaY * columnScrollSpeed;
+    list.scrollTop += e.deltaY * columnScrollSpeedV;
+    return;
   }
+  e.preventDefault();
+  columnsContainer.scrollLeft += (e.deltaY || e.deltaX) * columnScrollSpeed;
 }, { passive: false });
 
 // ===== Drag Auto-Scroll =====
@@ -457,25 +493,35 @@ function scrollTick() {
   }
 }
 
-document.addEventListener('dragstart', () => {
-  document.addEventListener('dragover', onDragMove);
-  dragScrollInterval = setInterval(scrollTick, 16);
-});
-document.addEventListener('dragend', () => {
+function stopDragAutoScroll() {
   document.removeEventListener('dragover', onDragMove);
   if (dragScrollInterval) { clearInterval(dragScrollInterval); dragScrollInterval = null; }
   dragMouseX = -1;
   dragMouseY = -1;
+}
+
+document.addEventListener('dragstart', () => {
+  stopDragAutoScroll();
+  document.addEventListener('dragover', onDragMove);
+  dragScrollInterval = setInterval(scrollTick, 16);
 });
+// A drop re-renders the columns and removes the dragged card, so its dragend
+// never bubbles up to document. Stop on drop (capture runs before the drop
+// handlers re-render) as well, or the timer keeps scrolling to the last
+// pointer position and fights the user's own scrolling.
+document.addEventListener('drop', stopDragAutoScroll, true);
+document.addEventListener('dragend', stopDragAutoScroll);
 
 saveBtn.addEventListener('click', async () => {
   const ordered = computeLoadOrder();
   setStatus(t('status.saving'));
   const result = await window.api.saveLoadOrder({
     gamePath: config.gamePath,
-    activeModFilenames: ordered,
+    activeModFilenames: loadOrderFiles(),
   });
   if (result.success) {
+    markSaved(ordered);
+    newlyInstalled = new Set();
     setStatus(t('status.saved'), 'success');
   } else {
     setStatus(t('status.saveError', { error: result.error }), 'error');
@@ -484,26 +530,84 @@ saveBtn.addEventListener('click', async () => {
 
 // Play button — save load order then launch game
 const playBtn = document.getElementById('play-btn');
-playBtn.addEventListener('click', async () => {
+const playMore = document.getElementById('play-more');
+
+// ===== Launch: RE_Kenshi or plain Kenshi =====
+// With RE_Kenshi installed the button has a ▾: launch either way once, or change which one the
+// button itself starts (config.launchMode). Without it, the button just starts the game.
+let reKenshiInstalled = false;
+
+function launchMode() {
+  return reKenshiInstalled ? (config.launchMode === 'vanilla' ? 'vanilla' : 'rekenshi') : null;
+}
+
+async function updateLaunchButton() {
+  reKenshiInstalled = !!config?.gamePath && (await window.api.rekenshiStatus(config.gamePath)).installed;
+  playMore.classList.toggle('hidden', !reKenshiInstalled);
+  const mode = launchMode();
+  document.getElementById('play-label').textContent = t(!mode ? 'toolbar.play' : mode === 'vanilla' ? 'play.runVanilla' : 'play.runRe');
+}
+
+function showLaunchMenu(x, y) {
+  const mode = launchMode();
+  POP.open([
+    { text: '▶ ' + t('play.runRe'), fn: () => launchGame('rekenshi') },
+    { text: '▶ ' + t('play.runVanilla'), fn: () => launchGame('vanilla') },
+    'sep',
+    { heading: t('play.defaultHead') },
+    { text: t('play.re'), check: mode === 'rekenshi', fn: () => setLaunchMode('rekenshi') },
+    { text: t('play.vanilla'), check: mode === 'vanilla', fn: () => setLaunchMode('vanilla') },
+  ], x, y);
+}
+
+function setLaunchMode(mode) {
+  config.launchMode = mode;
+  persistConfig();
+  updateLaunchButton();
+}
+
+playMore.addEventListener('click', () => {
+  const r = playBtn.getBoundingClientRect();
+  showLaunchMenu(r.left, r.bottom + 2);
+});
+playBtn.addEventListener('contextmenu', (e) => {
+  if (!reKenshiInstalled) return;
+  e.preventDefault();
+  showLaunchMenu(e.clientX, e.clientY);
+});
+playBtn.addEventListener('click', () => launchGame(launchMode()));
+
+async function launchGame(mode) {
+  // Plain Kenshi with mods on that need RE_Kenshi: ask first.
+  if (mode === 'vanilla') {
+    const need = mods.filter((m) => m.active && !m.missing && modTags(m).includes('RE_Kenshi'));
+    if (need.length) {
+      const list = need.slice(0, 12).map((m) => '• ' + m.displayName).join('\n') + (need.length > 12 ? '\n…' : '');
+      const choice = await choiceModal(t('play.needReTitle'), t('play.needReText', { count: need.length, list }), [
+        { key: 'cancel', text: t('modal.cancel') }, { key: 'run', text: t('play.needReRun'), primary: true }]);
+      if (choice !== 'run') return;
+    }
+  }
   // Save first
   const ordered = computeLoadOrder();
   setStatus(t('status.launching'));
   const saveResult = await window.api.saveLoadOrder({
     gamePath: config.gamePath,
-    activeModFilenames: ordered,
+    activeModFilenames: loadOrderFiles(),
   });
   if (!saveResult.success) {
     setStatus(t('status.saveError', { error: saveResult.error }), 'error');
     return;
   }
+  markSaved(ordered);
 
-  const launchResult = await window.api.launchGame(config.gamePath);
+  const launchResult = await window.api.launchGame(config.gamePath, mode);
   if (launchResult.success) {
-    setStatus(t('status.launched'), 'success');
+    setStatus(t(mode === 'vanilla' ? 'play.launchedVanilla' : mode === 'rekenshi' ? 'play.launchedRe' : 'status.launched'), 'success');
   } else {
     setStatus(t('status.launchError', { error: launchResult.error }), 'error');
   }
-});
+}
 
 // FCS button — launch Forgotten Construction Set
 document.getElementById('fcs-btn').addEventListener('click', async () => {
@@ -527,9 +631,9 @@ document.getElementById('mods-folder-btn').addEventListener('click', async () =>
   }
 });
 
-// Link All — create symlinks for all Steam mods
-document.getElementById('link-all-btn').addEventListener('click', async () => {
-  const steamMods = mods.filter(m => m.source === 'steam' && !linkedMods.has(m.filename));
+// Link Steam mods into the game's Mods folder, or unlink them (the toolbar's Link all /
+// Unlink all, and the category menu for a category's mods).
+async function linkModsToGame(steamMods) {
   if (steamMods.length === 0) {
     setStatus(t('status.allLinked'), 'success');
     return;
@@ -539,7 +643,7 @@ document.getElementById('link-all-btn').addEventListener('click', async () => {
   try {
     const result = await window.api.createModLinks({
       gamePath: config.gamePath,
-      mods: steamMods.map(m => ({ filename: m.filename, filePath: m.filePath }))
+      mods: steamMods.map(m => ({ filename: m.realFile, filePath: m.filePath }))
     });
     if (result.needsAdmin) {
       setStatus(t('status.linksNeedAdmin'), 'error');
@@ -557,11 +661,9 @@ document.getElementById('link-all-btn').addEventListener('click', async () => {
   } catch (err) {
     setStatus(t('status.linkError', { error: err.message }), 'error');
   }
-});
+}
 
-// Unlink All — remove all symlinks from game Mods folder
-document.getElementById('unlink-all-btn').addEventListener('click', async () => {
-  const linkedSteamMods = mods.filter(m => m.source === 'steam' && linkedMods.has(m.filename));
+async function unlinkModsFromGame(linkedSteamMods) {
   if (linkedSteamMods.length === 0) {
     setStatus(t('status.noLinks'), 'success');
     return;
@@ -571,7 +673,7 @@ document.getElementById('unlink-all-btn').addEventListener('click', async () => 
   try {
     const result = await window.api.removeModLinks({
       gamePath: config.gamePath,
-      mods: linkedSteamMods.map(m => ({ filename: m.filename, filePath: m.filePath }))
+      mods: linkedSteamMods.map(m => ({ filename: m.realFile, filePath: m.filePath }))
     });
     for (const fn of result.removed) linkedMods.delete(fn);
     renderColumns();
@@ -583,7 +685,15 @@ document.getElementById('unlink-all-btn').addEventListener('click', async () => 
   } catch (err) {
     setStatus(t('status.linkError', { error: err.message }), 'error');
   }
-});
+}
+
+// Link All — create symlinks for all Steam mods
+document.getElementById('link-all-btn').addEventListener('click', () =>
+  linkModsToGame(mods.filter(m => m.source === 'steam' && !linkedMods.has(m.realFile))));
+
+// Unlink All — remove all symlinks from game Mods folder
+document.getElementById('unlink-all-btn').addEventListener('click', () =>
+  unlinkModsFromGame(mods.filter(m => m.source === 'steam' && linkedMods.has(m.realFile))));
 
 // ===== Conflict Detection =====
 
@@ -591,9 +701,12 @@ const generateConflictsBtn = document.getElementById('generate-conflicts-btn');
 
 async function runConflictCheck() {
   const ordered = computeLoadOrder();
+  const seenReal = new Set();
   const activeMods = ordered.map((filename) => {
     const mod = mods.find((m) => m.filename === filename);
-    return mod ? { filename: mod.filename, filePath: mod.filePath } : null;
+    if (!mod || seenReal.has(mod.realFile)) return null;
+    seenReal.add(mod.realFile);
+    return { filename: mod.realFile, filePath: mod.filePath };
   }).filter(Boolean);
 
   if (activeMods.length === 0) {
@@ -605,7 +718,7 @@ async function runConflictCheck() {
   generateConflictsBtn.disabled = true;
 
   try {
-    conflictData = await window.api.generateConflicts(activeMods, config.gamePath);
+    conflictData = await withBusy(t('busy.conflicts', { count: activeMods.length }), () => window.api.generateConflicts(activeMods, config.gamePath));
     const conflictModCount = Object.keys(conflictData.modConflicts).length;
     if (conflictData.totalConflicts > 0) {
       setStatus(t('status.conflictsFound', { conflicts: conflictData.totalConflicts, mods: conflictModCount }), 'error');
@@ -627,125 +740,84 @@ generateConflictsBtn.addEventListener('click', runConflictCheck);
 const exportListBtn = document.getElementById('export-list-btn');
 const importListBtn = document.getElementById('import-list-btn');
 
-exportListBtn.addEventListener('click', async () => {
-  const filePath = await window.api.saveFileDialog('BEEP-mod-list.txt');
-  if (!filePath) return;
+// What an export holds. The Export button (and Ctrl+E) takes everything; Advanced export
+// (a long press, ▾, Ctrl+Shift+E) chooses: scope 'all' | 'active' | 'selected'; missing —
+// mods that aren't installed too; cats — the categories and places (else one plain list);
+// emptyCats — categories with none of the mods; pins — the actual load order (📌).
+const EXPORT_ALL = { scope: 'all', missing: true, cats: true, emptyCats: true, pins: true };
 
-  // Build full export: categories + order + active state
+// A mod as it is meant to be: one that isn't installed counts as it should be once installed.
+function exportIsOn(mod) {
+  return mod.missing ? ghostStore()[mod.realFile]?.on !== false : mod.active;
+}
+
+function exportInScope(m, o) {
+  return (o.missing || !m.missing)
+    && (o.scope === 'active' ? exportIsOn(m) : o.scope === 'selected' ? selectedMods.has(m.filename) : true);
+}
+
+function buildExportText(o = EXPORT_ALL) {
+  const inScope = (m) => exportInScope(m, o);
   const lines = ['# BEEP Kenshi Mod Manager - Mod List Export', '# Format: [Category] then filename|active/inactive', ''];
-
-  const sorted = [...categories].sort((a, b) => a.order - b.order);
-  sorted.push({ id: UNCATEGORIZED, name: 'Uncategorized', color: '#555' });
-
-  for (const cat of sorted) {
-    const catMods = getModsForCategory(cat.id);
-    if (catMods.length === 0) continue;
-    lines.push(`[${cat.name}]`);
-    for (const mod of catMods) {
-      lines.push(`${mod.filename}|${mod.active ? 'active' : 'inactive'}`);
+  const line = (mod) => {
+    // name|state, and |source:folder for a second copy of a name (older versions ignore it)
+    const copy = mod.filename !== mod.realFile ? '|' + mod.filename.split('::')[1] : '';
+    return `${mod.realFile}|${exportIsOn(mod) ? 'active' : 'inactive'}${copy}`;
+  };
+  const listed = [];
+  let catCount = 0;
+  if (o.cats) {
+    for (const cat of orderedCatIds().map(catById)) {
+      const catMods = getModsForCategory(cat.id).filter(inScope);
+      if (!catMods.length && !o.emptyCats) continue;
+      catCount++;
+      lines.push(`[${cat.id === UNCATEGORIZED ? 'Uncategorized' : cat.name}]`);
+      for (const mod of catMods) { lines.push(line(mod)); listed.push(mod); }
+      lines.push('');
     }
+  } else {
+    // One plain list (the import reads it without categories: "Mods only").
+    lines.push('[Uncategorized]');
+    for (const id of orderedCatIds()) for (const mod of getModsForCategory(id).filter(inScope)) { lines.push(line(mod)); listed.push(mod); }
     lines.push('');
   }
+  lines.push(exportDataLine(listed, o)); // actual order + Workshop ids (a comment line for older versions)
+  return {
+    text: lines.join('\n'),
+    mods: listed.length,
+    on: listed.filter(exportIsOn).length,
+    cats: o.cats ? catCount : 0,
+    missing: listed.filter((m) => m.missing).length,
+  };
+}
 
-  await window.api.writeFile(filePath, lines.join('\n'));
+async function exportList(o = EXPORT_ALL) {
+  // BEEP-mod-list_YYMMDD_HHMMSS.txt
+  const d = new Date();
+  const p2 = (n) => String(n).padStart(2, '0');
+  const stamp = `${p2(d.getFullYear() % 100)}${p2(d.getMonth() + 1)}${p2(d.getDate())}_${p2(d.getHours())}${p2(d.getMinutes())}${p2(d.getSeconds())}`;
+  const suffix = o.scope === 'all' ? '' : t('exp.fileSuffix.' + o.scope);
+  const filePath = await window.api.saveFileDialog(`BEEP-mod-list_${stamp}${suffix}.txt`);
+  if (!filePath) return;
+  await window.api.writeFile(filePath, buildExportText(o).text);
   setStatus(t('status.exported'), 'success');
-});
+}
 
-importListBtn.addEventListener('click', async () => {
+exportListBtn.addEventListener('click', () => exportList());
+
+async function importList() {
   const file = await window.api.openFileDialog([{ name: 'Text Files', extensions: ['txt'] }]);
   if (!file) return;
+  // A txt holding a 'BEEP1:' string (list-string.js) is the list it was made from.
+  const got = await listTextOf(file.content);
+  if (got.error) { setStatus(listStringError(got.error, got.game), 'error'); return; }
+  // The import settings (editing.js) show what changes before anything is applied.
+  const src = parseImportText(got.text);
+  if (!src) { setStatus(t('status.noModFilenames'), 'error'); return; }
+  importPreview(src);
+}
 
-  const content = file.content;
-  const lines = content.split('\n').map((l) => l.trim()).filter((l) => l && !l.startsWith('#'));
-
-  // Detect format: BEEP export (has [Category] headers + |active/inactive) or generic (just filenames)
-  const hasCategories = lines.some((l) => l.startsWith('['));
-  const hasPipes = lines.some((l) => l.includes('|'));
-  const isBeepFormat = hasCategories && hasPipes;
-
-  if (isBeepFormat) {
-    // Full BEEP import: categories, order, active state
-    let currentCat = null;
-    const catMap = {}; // catName -> [{ filename, active }]
-
-    for (const line of lines) {
-      const catMatch = line.match(/^\[(.+)\]$/);
-      if (catMatch) {
-        currentCat = catMatch[1];
-        if (!catMap[currentCat]) catMap[currentCat] = [];
-        continue;
-      }
-      if (!currentCat) continue;
-      const parts = line.split('|');
-      const filename = parts[0].trim();
-      const active = parts.length > 1 ? parts[1].trim() === 'active' : true;
-      if (filename.endsWith('.mod')) {
-        catMap[currentCat].push({ filename, active });
-      }
-    }
-
-    // Apply: create missing categories, assign mods
-    for (const [catName, catMods] of Object.entries(catMap)) {
-      let catId;
-      if (catName === 'Uncategorized') {
-        catId = UNCATEGORIZED;
-      } else {
-        let cat = categories.find((c) => c.name === catName);
-        if (!cat) {
-          cat = { id: generateId(), name: catName, color: '#' + Math.floor(Math.random() * 0xCCCCCC + 0x333333).toString(16), order: categories.length };
-          categories.push(cat);
-        }
-        catId = cat.id;
-      }
-
-      modOrders[catId] = [];
-      for (const { filename, active } of catMods) {
-        const mod = mods.find((m) => m.filename === filename);
-        if (!mod) continue;
-        mod.category = catId;
-        mod.active = active;
-        if (catId !== UNCATEGORIZED) modCategories[mod.filename] = catId;
-        else delete modCategories[mod.filename];
-        modOrders[catId].push(mod.filename);
-      }
-    }
-
-    syncModCategories();
-    persistConfig();
-    renderColumns();
-    setStatus(t('status.importedBeep', { count: Object.keys(catMap).length }), 'success');
-  } else {
-    // Generic import: just a list of .mod filenames — apply as uncategorized order
-    const filenames = lines.filter((l) => l.endsWith('.mod'));
-    if (filenames.length === 0) {
-      setStatus(t('status.noModFilenames'), 'error');
-      return;
-    }
-
-    // Reorder uncategorized mods to match the import list
-    const newOrder = [];
-    for (const fn of filenames) {
-      const mod = mods.find((m) => m.filename === fn);
-      if (mod) {
-        mod.category = UNCATEGORIZED;
-        delete modCategories[mod.filename];
-        newOrder.push(fn);
-      }
-    }
-    // Append any uncategorized mods not in the list
-    for (const mod of mods) {
-      if (mod.category === UNCATEGORIZED && !newOrder.includes(mod.filename)) {
-        newOrder.push(mod.filename);
-      }
-    }
-    modOrders[UNCATEGORIZED] = newOrder;
-
-    syncModCategories();
-    persistConfig();
-    renderColumns();
-    setStatus(t('status.importedGeneric', { count: filenames.length }), 'success');
-  }
-});
+importListBtn.addEventListener('click', () => importList());
 
 // Build database from current categories (dev tool — Ctrl+Shift+B)
 document.addEventListener('keydown', async (e) => {
@@ -754,7 +826,7 @@ document.addEventListener('keydown', async (e) => {
     for (const mod of mods) {
       if (mod.category === UNCATEGORIZED) continue;
       const cat = categories.find((c) => c.id === mod.category);
-      if (cat) db[mod.filename] = cat.name;
+      if (cat) db[mod.realFile] = cat.name;
     }
     const count = Object.keys(db).length;
     const dbPath = await window.api.saveModDatabase(db);
@@ -1652,19 +1724,10 @@ function updateDepStatus() {
 
 // ===== Load Order Computation =====
 
+// The actual load order (what Save writes): the category layout, except mods pinned (📌)
+// to a position by hand. See editing.js.
 function computeLoadOrder() {
-  const result = [];
-  const sorted = [...categories].sort((a, b) => a.order - b.order);
-  // Add uncategorized at end
-  sorted.push({ id: UNCATEGORIZED });
-
-  for (const cat of sorted) {
-    const catMods = getModsForCategory(cat.id);
-    for (const mod of catMods) {
-      if (mod.active) result.push(mod.filename);
-    }
-  }
-  return result;
+  return [...actualOrder];
 }
 
 // ===== Category Helpers =====
@@ -1695,24 +1758,6 @@ function randomColor() {
   return colors[Math.floor(Math.random() * colors.length)];
 }
 
-function reorderCategory(srcId, targetId) {
-  const src = categories.find((c) => c.id === srcId);
-  const target = categories.find((c) => c.id === targetId);
-  if (!src || !target) return;
-
-  // Remove src from array and insert at target's position
-  categories = categories.filter((c) => c.id !== srcId);
-  const targetIdx = categories.findIndex((c) => c.id === targetId);
-  categories.splice(targetIdx, 0, src);
-
-  // Reassign order values
-  categories.forEach((c, i) => c.order = i);
-
-  syncModCategories();
-  persistConfig();
-  renderColumns();
-}
-
 // ===== Persist =====
 
 async function persistConfig() {
@@ -1722,8 +1767,147 @@ async function persistConfig() {
   config.uncategorizedPinned = uncategorizedPinned;
   config.kenshiTheme = document.body.classList.contains('kenshi-theme');
   config.tutorialDismissed = tutorialDismissed;
+  config.pins = [...pins];
+  scheduleHistoryCheck();
   await window.api.saveConfig(config);
 }
+
+// ===== Undo / Redo =====
+// Every user change ends in persistConfig(), so history is taken there: the layout
+// (categories, mod placement, order, active state) is compared with the last
+// recorded one, and the old layout goes on the undo stack when it differs.
+// Several persistConfig() calls in one action are folded into one step.
+
+const HISTORY_LIMIT = 100;
+const undoStack = [];
+const redoStack = [];
+let historyBaseline = null;
+let historyCheckPending = false;
+
+// Mods are keyed by file path (the same .mod filename can exist locally and in several
+// workshop folders); placeholders (not installed) have none, so they go by filename.
+function layoutKeyOf(mod) {
+  return mod.filePath || 'missing:' + mod.filename;
+}
+
+function captureLayout() {
+  return JSON.stringify({
+    categories,
+    modCategories,
+    modOrders,
+    placement: mods.map((m) => [layoutKeyOf(m), m.category]),
+    active: mods.filter((m) => m.active).map(layoutKeyOf),
+    order: actualOrder,
+    pins: [...pins],
+    uncatPos: uncatPos(),
+    removed: removedSids(), // deleted mods (editing.js), for undo
+    ghosts: config?.ghosts || {},
+  });
+}
+
+// Take the current layout as the starting point without adding an undo step.
+function resetHistoryBaseline() {
+  historyBaseline = captureLayout();
+}
+
+function scheduleHistoryCheck() {
+  if (historyCheckPending) return;
+  historyCheckPending = true;
+  setTimeout(() => {
+    historyCheckPending = false;
+    const current = captureLayout();
+    if (historyBaseline !== null && current !== historyBaseline) {
+      undoStack.push(historyBaseline);
+      if (undoStack.length > HISTORY_LIMIT) undoStack.shift();
+      redoStack.length = 0;
+    }
+    historyBaseline = current;
+    updateHistoryButtons();
+  }, 0);
+}
+
+// keepCategories: the categories themselves (order, names, colors, where Uncategorized is) stay
+// as they are now — going back to the last save only undoes the load order and the mods' places.
+function restoreLayout(json, { keepCategories = false } = {}) {
+  const state = JSON.parse(json);
+  syncDeleted(state); // deleted mods come back / go again, placeholders (editing.js)
+  if (!keepCategories) categories = state.categories;
+  modCategories = state.modCategories;
+  modOrders = state.modOrders;
+  const placement = new Map(state.placement);
+  const active = new Set(state.active);
+  for (const mod of mods) {
+    mod.category = placement.get(layoutKeyOf(mod)) || UNCATEGORIZED;
+    if (mod.category !== UNCATEGORIZED && !categories.some((c) => c.id === mod.category)) {
+      mod.category = UNCATEGORIZED;
+    }
+    mod.active = active.has(layoutKeyOf(mod));
+  }
+  if (state.order) actualOrder = [...state.order];
+  pins = new Set(state.pins || []);
+  if (!keepCategories && Number.isInteger(state.uncatPos)) config.uncatPos = state.uncatPos;
+  historyBaseline = captureLayout();
+  persistConfig();
+  renderColumns();
+  modCount.textContent = t('modCount', { total: mods.length, active: mods.filter((m) => m.active).length });
+}
+
+function undo() {
+  if (undoStack.length === 0) return;
+  redoStack.push(captureLayout());
+  restoreLayout(undoStack.pop());
+  setStatus(t('status.undone'));
+  updateHistoryButtons();
+}
+
+function redo() {
+  if (redoStack.length === 0) return;
+  undoStack.push(captureLayout());
+  restoreLayout(redoStack.pop());
+  setStatus(t('status.redone'));
+  updateHistoryButtons();
+}
+
+const undoBtn = document.getElementById('undo-btn');
+const redoBtn = document.getElementById('redo-btn');
+
+// Badges are a fixed two-digit width: empty (grey) at 0, "99+" above 99.
+function historyBadge(n) {
+  return n > 99 ? '99+' : n ? String(n) : '';
+}
+
+function updateHistoryButtons() {
+  undoBtn.disabled = undoStack.length === 0;
+  redoBtn.disabled = redoStack.length === 0;
+  document.getElementById('undo-count').textContent = historyBadge(undoStack.length);
+  document.getElementById('redo-count').textContent = historyBadge(redoStack.length);
+}
+
+undoBtn.addEventListener('click', undo);
+redoBtn.addEventListener('click', redo);
+
+function isEditableTarget(el) {
+  return !!el && (el.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(el.tagName));
+}
+
+// Undo/redo from the shortcut keys or the Edit menu. In a text field they keep
+// their normal text-editing meaning.
+function runHistoryCommand(command) {
+  if (exportPicking()) { exportSelHistory(command); return; } // the export panel: the selection
+  if (isEditableTarget(document.activeElement)) {
+    document.execCommand(command);
+    return;
+  }
+  if (mainScreen.classList.contains('hidden')) return;
+  if (command === 'undo') undo();
+  else redo();
+}
+
+// The undo / redo keys are in editing.js's changeable shortcut list.
+
+window.api.onMenuCommand((command) => {
+  if (command === 'undo' || command === 'redo') runHistoryCommand(command);
+});
 
 function syncModCategories() {
   // Rebuild modCategories and modOrders from current mod state
@@ -1745,6 +1929,10 @@ function syncModCategories() {
 // ===== Rendering =====
 
 function renderColumns() {
+  syncGhostMods(); // placeholders for mods that aren't installed (editing.js), always off
+  enforceOneCopy();
+  applyAutoSorts();
+  syncActualOrder();
   // Preserve scroll position across re-renders
   const savedScrollTop = columnsContainer.scrollTop;
   const savedScrollLeft = columnsContainer.scrollLeft;
@@ -1759,20 +1947,11 @@ function renderColumns() {
   }
   columnsContainer.innerHTML = '';
 
-  const sorted = [...categories].sort((a, b) => a.order - b.order);
-  const allCats = [...sorted, { id: UNCATEGORIZED, name: 'Uncategorized', color: '#555' }];
+  const allCats = orderedCatIds().map(catById);
 
-  // Pre-compute global load order numbers for active mods
+  // Load order numbers for active mods
   const globalOrder = {};
-  let orderNum = 1;
-  for (const cat of allCats) {
-    const catMods = getModsForCategory(cat.id);
-    for (const mod of catMods) {
-      if (mod.active) {
-        globalOrder[mod.filename] = orderNum++;
-      }
-    }
-  }
+  actualOrder.forEach((filename, i) => { globalOrder[filename] = i + 1; });
 
   // Render columns
   const pinnedPanel = document.getElementById('pinned-uncat-panel');
@@ -1842,7 +2021,9 @@ function renderColumns() {
   });
 
   updateDetailPanel();
+  selDrawnFor = selectedMod;
   updateDepStatus();
+  afterRender();
 }
 
 function createColumn(catId, name, color, globalOrder) {
@@ -1854,6 +2035,7 @@ function createColumn(catId, name, color, globalOrder) {
   const header = document.createElement('div');
   header.className = 'column-header';
   header.style.borderTopColor = color;
+  makeHeaderDraggable(header, catId);
 
   // Category toggle checkbox
   const catMods = getModsForCategory(catId);
@@ -1887,6 +2069,7 @@ function createColumn(catId, name, color, globalOrder) {
       const newName = await showInputModal(t('category.namePrompt'), cat.name);
       if (newName && newName.trim()) {
         cat.name = newName.trim();
+        delete cat.def;
         syncModCategories();
         persistConfig();
         renderColumns();
@@ -1898,8 +2081,10 @@ function createColumn(catId, name, color, globalOrder) {
   headerCount.className = 'column-header-count';
   const modCountText = `${catMods.length}`;
   if (activeInCat.length > 0) {
-    const first = globalOrder[activeInCat[0].filename];
-    const last = globalOrder[activeInCat[activeInCat.length - 1].filename];
+    // Lowest and highest load order number (pinned mods can sit out of category order).
+    const nums = activeInCat.map((m) => globalOrder[m.filename]).filter(Boolean);
+    const first = Math.min(...nums);
+    const last = Math.max(...nums);
     headerCount.textContent = `(${modCountText}) #${first}-${last}`;
   } else {
     headerCount.textContent = `(${modCountText})`;
@@ -1907,7 +2092,7 @@ function createColumn(catId, name, color, globalOrder) {
 
   // Collapse/expand button
   const minimizeBtn = document.createElement('span');
-  minimizeBtn.className = 'column-move-btn';
+  minimizeBtn.className = 'column-move-btn km-min-btn';
   const isMinimized = minimizedCategories.has(catId);
   minimizeBtn.textContent = isMinimized ? '+' : '\u2212';
   minimizeBtn.title = isMinimized ? t('category.expand') : t('category.collapse');
@@ -1921,29 +2106,14 @@ function createColumn(catId, name, color, globalOrder) {
     renderColumns();
   });
 
-  // Right-click context menu (not for uncategorized)
+  // (Right-click on the header: the category menu, cat-menus.js.)
   if (catId !== UNCATEGORIZED) {
-    header.addEventListener('contextmenu', (e) => {
-      e.preventDefault();
-      showContextMenu(e.clientX, e.clientY, catId);
-    });
-
     // Direction-aware move buttons
     const upIcon = verticalLayout ? '\u25B2' : '\u25C0';
     const downIcon = verticalLayout ? '\u25BC' : '\u25B6';
 
     function swapCategory(direction) {
-      const sorted = [...categories].sort((a, b) => a.order - b.order);
-      const idx = sorted.findIndex((c) => c.id === catId);
-      const swapIdx = idx + direction;
-      if (swapIdx < 0 || swapIdx >= sorted.length) return;
-      // Simple order value swap
-      const tmp = sorted[idx].order;
-      sorted[idx].order = sorted[swapIdx].order;
-      sorted[swapIdx].order = tmp;
-      syncModCategories();
-      persistConfig();
-      renderColumns();
+      moveCategoryBy(catId, direction);
     }
 
     const moveUp = document.createElement('span');
@@ -1960,7 +2130,7 @@ function createColumn(catId, name, color, globalOrder) {
 
     const headerRow1 = document.createElement('div');
     headerRow1.className = 'column-header-row';
-    headerRow1.append(headerName, headerCount);
+    headerRow1.append(headerName, ...headerRenameButton(catId), headerCount);
 
     // Color button
     const colorBtn = document.createElement('span');
@@ -2006,7 +2176,8 @@ function createColumn(catId, name, color, globalOrder) {
 
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
-    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, deleteBtn);
+    headerRow1.append(headerSpacer(), deleteBtn);
+    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   } else {
@@ -2016,7 +2187,7 @@ function createColumn(catId, name, color, globalOrder) {
 
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
-    headerRow2.append(headerCb, minimizeBtn);
+    headerRow2.append(headerCb, ...headerMoveButtons(catId), minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   }
@@ -2026,7 +2197,16 @@ function createColumn(catId, name, color, globalOrder) {
   // Mod list
   const modsList = document.createElement('div');
   modsList.className = 'column-mods';
-  if (minimizedCategories.has(catId)) modsList.classList.add('hidden');
+  if (minimizedCategories.has(catId)) {
+    modsList.classList.add('hidden');
+    // Side by side it becomes a narrow strip (style.css); a click on it opens it again.
+    col.classList.add('km-collapsed');
+    header.addEventListener('click', (e) => {
+      if (verticalLayout || e.target.closest('.km-min-btn')) return;
+      minimizedCategories.delete(catId);
+      renderColumns();
+    });
+  }
   modsList.dataset.category = catId;
 
   for (const mod of catMods) {
@@ -2076,7 +2256,7 @@ function createModCard(mod, catColor, globalOrder) {
   card.className = 'mod-card';
   card.style.borderLeftColor = catColor;
   if (!mod.active) card.classList.add('inactive');
-  if (selectedMods.has(mod.filename) || (selectedMod && selectedMod.filePath === mod.filePath)) card.classList.add('selected');
+  if (selectedMods.has(mod.filename) || (selectedMod && selectedMod.filename === mod.filename)) card.classList.add('selected');
 
   // Flash animation for just-moved mods
   if (justMovedMods.has(mod.filename)) {
@@ -2119,7 +2299,7 @@ function createModCard(mod, catColor, globalOrder) {
 
   // Link badge for symlinked Steam mods
   let linkBadge = null;
-  if (mod.source === 'steam' && linkedMods.has(mod.filename)) {
+  if (mod.source === 'steam' && linkedMods.has(mod.realFile)) {
     linkBadge = document.createElement('span');
     linkBadge.className = 'link-badge';
     linkBadge.textContent = '\uD83D\uDD17';
@@ -2128,22 +2308,37 @@ function createModCard(mod, catColor, globalOrder) {
 
   // Conflict indicator + highlight
   const cardItems = [handle, cbWrap, name];
-  if (conflictData && conflictData.modConflicts[mod.filename]) {
-    const count = conflictData.modConflicts[mod.filename].length;
+  if (conflictData && conflictData.modConflicts[mod.realFile]) {
+    const count = conflictData.modConflicts[mod.realFile].length;
     const badge = document.createElement('span');
     badge.className = 'conflict-count-badge';
     badge.textContent = count;
     cardItems.push(badge);
   }
   if (linkBadge) cardItems.push(linkBadge);
+  const sameName = sameNameCopies(mod).length;
+  if (sameName) {
+    const copies = document.createElement('span');
+    copies.className = 'km-copies-badge';
+    copies.textContent = '×' + (sameName + 1);
+    copies.title = t('card.copies', { count: sameName + 1 });
+    cardItems.push(copies);
+  }
+  if (pins.has(mod.filename) && mod.active) {
+    const pin = document.createElement('span');
+    pin.className = 'km-pin';
+    pin.textContent = '📌';
+    pin.title = t('pin.tip');
+    cardItems.push(pin);
+  }
   cardItems.push(src);
   card.append(...cardItems);
 
   // Highlight mods this selection conflicts with
-  if (selectedMod && conflictData && selectedMod.filePath !== mod.filePath) {
-    const selConflicts = conflictData.modConflicts[selectedMod.filename];
+  if (selectedMod && conflictData && selectedMod.filename !== mod.filename) {
+    const selConflicts = conflictData.modConflicts[selectedMod.realFile];
     if (selConflicts) {
-      const relationship = getConflictRelationship(selectedMod.filename, mod.filename, selConflicts);
+      const relationship = getConflictRelationship(selectedMod.realFile, mod.realFile, selConflicts);
       if (relationship === 'overwriting') {
         card.classList.add('conflict-highlight-green');
       } else if (relationship === 'overwritten') {
@@ -2198,11 +2393,9 @@ function createModCard(mod, catColor, globalOrder) {
       }
     } else if (e.ctrlKey || e.metaKey) {
       // Ctrl+click: toggle individual selection
-      if (selectedMods.has(mod.filename)) {
-        selectedMods.delete(mod.filename);
-      } else {
-        selectedMods.add(mod.filename);
-      }
+      ctrlToggle(mod);
+      redrawSelection();
+      return;
     } else {
       // Normal click: single select
       selectedMods.clear();
@@ -2210,7 +2403,7 @@ function createModCard(mod, catColor, globalOrder) {
     }
     selectedMod = mod;
     lastClickedMod = mod;
-    renderColumns();
+    redrawSelection();
   });
 
   // Right-click to assign category (bulk if multi-selected)
@@ -2376,19 +2569,12 @@ function clampMenuPosition(menu, x, y) {
   menu.style.top = y + 'px';
 }
 
-function showContextMenu(x, y, catId) {
-  contextTarget = catId;
-  clampMenuPosition(contextMenu, x, y);
-}
-
 const modContextMenu = document.getElementById('mod-context-menu');
 const modContextCategories = document.getElementById('mod-context-categories');
 let modContextTarget = null;
 
 function hideContextMenu() {
-  contextMenu.classList.add('hidden');
   modContextMenu.classList.add('hidden');
-  contextTarget = null;
   modContextTarget = null;
 }
 
@@ -2403,7 +2589,7 @@ document.getElementById('mod-context-create-links').addEventListener('click', as
   const bulkMods = selectedMods.size > 1
     ? mods.filter(m => selectedMods.has(m.filename))
     : (modContextTarget ? [modContextTarget] : []);
-  const steamMods = bulkMods.filter(m => m.source === 'steam' && !linkedMods.has(m.filename));
+  const steamMods = bulkMods.filter(m => m.source === 'steam' && !linkedMods.has(m.realFile));
   hideContextMenu();
   if (steamMods.length === 0) return;
 
@@ -2411,7 +2597,7 @@ document.getElementById('mod-context-create-links').addEventListener('click', as
   try {
     const result = await window.api.createModLinks({
       gamePath: config.gamePath,
-      mods: steamMods.map(m => ({ filename: m.filename, filePath: m.filePath }))
+      mods: steamMods.map(m => ({ filename: m.realFile, filePath: m.filePath }))
     });
     if (result.needsAdmin) {
       setStatus(t('status.linksNeedAdmin'), 'error');
@@ -2435,7 +2621,7 @@ document.getElementById('mod-context-remove-links').addEventListener('click', as
   const bulkMods = selectedMods.size > 1
     ? mods.filter(m => selectedMods.has(m.filename))
     : (modContextTarget ? [modContextTarget] : []);
-  const steamMods = bulkMods.filter(m => m.source === 'steam' && linkedMods.has(m.filename));
+  const steamMods = bulkMods.filter(m => m.source === 'steam' && linkedMods.has(m.realFile));
   hideContextMenu();
   if (steamMods.length === 0) return;
 
@@ -2443,7 +2629,7 @@ document.getElementById('mod-context-remove-links').addEventListener('click', as
   try {
     const result = await window.api.removeModLinks({
       gamePath: config.gamePath,
-      mods: steamMods.map(m => ({ filename: m.filename, filePath: m.filePath }))
+      mods: steamMods.map(m => ({ filename: m.realFile, filePath: m.filePath }))
     });
     for (const fn of result.removed) linkedMods.delete(fn);
     renderColumns();
@@ -2468,42 +2654,13 @@ sendToEl.addEventListener('keydown', (e) => {
   if (!modContextTarget || isNaN(pos)) return;
 
   const mod = modContextTarget;
-
-  // Build global ordered list of active mods (same order as renderColumns)
-  const sorted = [...categories].sort((a, b) => a.order - b.order);
-  const allCats = [...sorted, { id: UNCATEGORIZED, name: 'Uncategorized', color: '#555' }];
-  const globalList = []; // { filename, category }
-  for (const cat of allCats) {
-    for (const m of getModsForCategory(cat.id)) {
-      if (m.active) globalList.push({ filename: m.filename, category: cat.id });
-    }
-  }
-
-  const maxPos = globalList.length;
-  const targetIdx = Math.max(1, Math.min(pos, maxPos)) - 1; // 0-indexed
-
-  // Find what category the target position belongs to
-  const targetEntry = globalList[targetIdx];
-  const targetCatId = targetEntry.category;
-
-  // Insert after the mod at targetIdx (so the moved mod lands at that number).
-  // moveMod inserts *before* a filename, so we pass the next mod in the same category.
-  const globalListWithoutMod = globalList.filter(e => e.filename !== mod.filename);
-  const adjustedIdx = globalListWithoutMod.findIndex(e => e.filename === targetEntry.filename);
-  // Find the next mod in the same category after the target position
-  let afterFilename = null;
-  for (let i = adjustedIdx + 1; i < globalListWithoutMod.length; i++) {
-    if (globalListWithoutMod[i].category === targetCatId) {
-      afterFilename = globalListWithoutMod[i].filename;
-      break;
-    }
-  }
-
-  // Move the mod — afterFilename=null means append to end of category
-  moveMod(mod, targetCatId, afterFilename);
-  syncModCategories();
-  persistConfig();
-  renderColumns();
+  // The mod (or the selection) lands at that number in the actual order and is pinned
+  // there; its category stays as it is.
+  const files = selectedMods.has(mod.filename) && selectedMods.size > 1
+    ? computeLoadOrder().filter((f) => selectedMods.has(f)).concat([...selectedMods].filter((f) => !actualOrder.includes(f)))
+    : [mod.filename];
+  setPosition(files, pos);
+  commitLayout();
   hideContextMenu();
 });
 
@@ -2521,8 +2678,8 @@ function showModContextMenu(x, y, mod) {
   const createLinksItem = document.getElementById('mod-context-create-links');
   const removeLinksItem = document.getElementById('mod-context-remove-links');
   const steamInSelection = bulkMods.filter(m => m.source === 'steam');
-  const unlinkedSteam = steamInSelection.filter(m => !linkedMods.has(m.filename));
-  const linkedSteam = steamInSelection.filter(m => linkedMods.has(m.filename));
+  const unlinkedSteam = steamInSelection.filter(m => !linkedMods.has(m.realFile));
+  const linkedSteam = steamInSelection.filter(m => linkedMods.has(m.realFile));
 
   if (steamInSelection.length > 0) {
     linkSep.classList.remove('hidden');
@@ -2570,7 +2727,7 @@ function showModContextMenu(x, y, mod) {
   }
 
   const allCats = [...categories].sort((a, b) => a.order - b.order);
-  allCats.push({ id: UNCATEGORIZED, name: 'Uncategorized', color: '#555' });
+  allCats.push({ id: UNCATEGORIZED, name: uncatName(), color: '#555' });
 
   for (const cat of allCats) {
     // For single mod, skip current category
@@ -2595,6 +2752,8 @@ function showModContextMenu(x, y, mod) {
     modContextCategories.appendChild(item);
   }
 
+  updatePinMenu(bulkMods);
+  KMT_BRIDGE.contextShown(bulkMods); // 한글화 작업 / 패치 작업 (kmt-bridge.js)
   clampMenuPosition(modContextMenu, x, y);
 }
 
@@ -2605,46 +2764,35 @@ document.addEventListener('contextmenu', (e) => {
   }
 });
 
-contextMenu.addEventListener('click', async (e) => {
-  const action = e.target.dataset.action;
-  if (!action || !contextTarget) return;
-
-  const cat = categories.find((c) => c.id === contextTarget);
+// Category color (the hidden color input) and delete (its mods go to Uncategorized).
+function pickCategoryColor(catId) {
+  const cat = catById(catId);
   if (!cat) return;
+  colorPicker.value = cat.color;
+  colorPicker.dataset.catId = cat.id;
+  colorPicker.click();
+}
 
-  if (action === 'rename') {
-    hideContextMenu();
-    const newName = await showInputModal(t('category.namePrompt'), cat.name);
-    if (newName && newName.trim()) {
-      cat.name = newName.trim();
-      syncModCategories();
-      persistConfig();
-      renderColumns();
+function removeCategory(catId) {
+  for (const mod of mods) {
+    if (mod.category === catId) {
+      mod.category = UNCATEGORIZED;
+      delete modCategories[mod.filename];
     }
-    return;
-  } else if (action === 'color') {
-    colorPicker.value = cat.color;
-    colorPicker.dataset.catId = cat.id;
-    colorPicker.click();
-  } else if (action === 'delete') {
-    // Move all mods in this category to uncategorized
-    for (const mod of mods) {
-      if (mod.category === cat.id) {
-        mod.category = UNCATEGORIZED;
-        delete modCategories[mod.filename];
-      }
-    }
-    categories = categories.filter((c) => c.id !== cat.id);
-    delete modOrders[cat.id];
-    // Reindex order
-    categories.sort((a, b) => a.order - b.order).forEach((c, i) => c.order = i);
-    syncModCategories();
-    persistConfig();
-    renderColumns();
   }
+  categories = categories.filter((c) => c.id !== catId);
+  delete modOrders[catId];
+  // Reindex order
+  categories.sort((a, b) => a.order - b.order).forEach((c, i) => c.order = i);
+}
 
-  hideContextMenu();
-});
+function deleteCategory(catId) {
+  if (catId === UNCATEGORIZED || !catById(catId)) return;
+  removeCategory(catId);
+  syncModCategories();
+  persistConfig();
+  renderColumns();
+}
 
 colorPicker.addEventListener('input', () => {
   const catId = colorPicker.dataset.catId;
@@ -2927,6 +3075,8 @@ async function applyPack(pack) {
 
   applyCategoriesToMods();
   syncModCategories();
+  pins.clear();
+  rebuildOrder([]);
   await persistConfig();
   renderColumns();
 
@@ -3055,7 +3205,7 @@ function buildPromptHeader(catNames) {
 
 function buildModEntry(mod, workshopDetails) {
   let e = `=== MOD: ${mod.displayName} ===\n`;
-  e += `Filename: ${mod.filename}\n`;
+  e += `Filename: ${mod.realFile}\n`;
   e += `Source: ${mod.source}\n`;
   if (mod.author) e += `Author: ${mod.author}\n`;
   let desc = mod.description || '';
@@ -3067,7 +3217,7 @@ function buildModEntry(mod, workshopDetails) {
 }
 
 function buildModEntryCompact(mod, workshopDetails) {
-  let e = `${mod.filename}`;
+  let e = `${mod.realFile}`;
   const wid = getWorkshopId(mod);
   const detail = wid ? workshopDetails[wid] : null;
   const tags = detail?.tags;
@@ -3092,7 +3242,7 @@ function buildCurrentSortSection(sortedCats) {
   for (const cat of sortedCats) {
     const catMods = getModsForCategory(cat.id).filter((m) => m.active);
     s += `[${cat.name}]\n`;
-    for (const mod of catMods) s += `${mod.filename}\n`;
+    for (const mod of catMods) s += `${mod.realFile}\n`;
     s += '\n';
   }
   return s;
@@ -3130,7 +3280,7 @@ aiExportBtn.addEventListener('click', async () => {
 
   let workshopDetails = {};
   if (workshopIds.length > 0) {
-    workshopDetails = await window.api.fetchWorkshopDetails(workshopIds);
+    workshopDetails = await withBusy(t('busy.steam', { count: workshopIds.length }), () => window.api.fetchWorkshopDetails(workshopIds));
   }
 
   if (choice === 'split') {
@@ -3349,6 +3499,177 @@ function parseAndApplyAiResponse(text) {
   }
 }
 
+// ===== Detail Translation =====
+
+const TRANSLATE_FROM_LANGS = ['auto', 'en', 'ja', 'ru', 'zh-CN', 'zh-TW', 'ko', 'de', 'fr', 'es', 'pt', 'pl', 'tr'];
+const TRANSLATE_TO_LANGS = ['ko', 'en', 'ja', 'zh-CN', 'zh-TW', 'ru', 'de', 'fr', 'es', 'pt', 'pl', 'tr'];
+
+const translateNameCb = document.getElementById('translate-name');
+const translateDescCb = document.getElementById('translate-desc');
+const translateFromSel = document.getElementById('translate-from');
+const translateToSel = document.getElementById('translate-to');
+const detailNameTranslated = document.getElementById('detail-name-translated');
+const detailDescEl = document.getElementById('detail-desc');
+const detailDescTranslated = document.getElementById('detail-desc-translated');
+const detailDescStatus = document.getElementById('detail-desc-status');
+const detailDescToggle = document.getElementById('detail-desc-toggle');
+
+const steamDescCache = new Map();    // workshop id -> cleaned Steam page description
+const translationCache = new Map();  // "sl|tl|text" -> { text, detected }
+let detailTextRequest = 0;
+let showOriginalDesc = false;
+
+function translateLangName(code) {
+  if (code === 'auto') return t('translate.auto');
+  try {
+    return new Intl.DisplayNames([currentLocale], { type: 'language' }).of(code) || code;
+  } catch {
+    return code;
+  }
+}
+
+function fillTranslateControls() {
+  const saved = (config && config.translate) || {};
+  const fill = (sel, codes, value) => {
+    sel.innerHTML = '';
+    for (const code of codes) {
+      const opt = document.createElement('option');
+      opt.value = code;
+      opt.textContent = translateLangName(code);
+      sel.appendChild(opt);
+    }
+    sel.value = codes.includes(value) ? value : codes[0];
+  };
+  fill(translateFromSel, TRANSLATE_FROM_LANGS, saved.from || 'auto');
+  fill(translateToSel, TRANSLATE_TO_LANGS, saved.to || 'ko');
+  translateNameCb.checked = saved.name === true;
+  translateDescCb.checked = saved.desc !== false;
+}
+
+function onTranslateSettingChange() {
+  if (config) {
+    config.translate = {
+      name: translateNameCb.checked,
+      desc: translateDescCb.checked,
+      from: translateFromSel.value,
+      to: translateToSel.value,
+    };
+    persistConfig();
+  }
+  if (selectedMod) refreshDetailText(selectedMod);
+}
+
+[translateNameCb, translateDescCb, translateFromSel, translateToSel].forEach((el) => {
+  el.addEventListener('change', onTranslateSettingChange);
+});
+
+detailDescToggle.addEventListener('click', () => {
+  showOriginalDesc = !showOriginalDesc;
+  updateDescToggle();
+});
+
+function updateDescToggle() {
+  const translated = !detailDescTranslated.classList.contains('hidden');
+  detailDescToggle.classList.toggle('hidden', !translated);
+  detailDescEl.classList.toggle('hidden', translated && !showOriginalDesc);
+  detailDescToggle.textContent = t(showOriginalDesc ? 'translate.hideOriginal' : 'translate.showOriginal');
+}
+
+// Steam descriptions use BBCode; keep the text and drop the markup.
+function cleanSteamDescription(text) {
+  return String(text || '')
+    .replace(/\r\n/g, '\n')
+    .replace(/\[img\][\s\S]*?\[\/img\]/gi, '')
+    .replace(/\[previewyoutube=[^\]]*\][\s\S]*?\[\/previewyoutube\]/gi, '')
+    .replace(/\[url=[^\]]*\]([\s\S]*?)\[\/url\]/gi, '$1')
+    .replace(/\[\*\]/g, '• ')
+    .replace(/\[hr\](\[\/hr\])?/gi, '────────')
+    .replace(/\[\/?(h[1-6]|b|i|u|s|strike|spoiler|noparse|url|list|olist|quote|code|table|tr|th|td)(=[^\]]*)?\]/gi, '')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+async function getSteamDescription(mod) {
+  if (mod.source !== 'steam') return '';
+  const id = getWorkshopId(mod);
+  if (!id) return '';
+  if (steamDescCache.has(id)) return steamDescCache.get(id);
+  const details = await window.api.fetchWorkshopDetails([id]);
+  if (!details[id]) return '';  // request failed; try again next time
+  const desc = cleanSteamDescription(details[id].description);
+  steamDescCache.set(id, desc);
+  return desc;
+}
+
+async function translateCached(texts, sl, tl) {
+  const key = (text) => `${sl}|${tl}|${text}`;
+  const missing = [...new Set(texts.filter((text) => !translationCache.has(key(text))))];
+  if (missing.length > 0) {
+    const results = await window.api.translateTexts(missing, sl, tl);
+    missing.forEach((text, i) => translationCache.set(key(text), results[i]));
+  }
+  return texts.map((text) => translationCache.get(key(text)));
+}
+
+// Fills in the Steam page description and the translations for the selected mod.
+async function refreshDetailText(mod) {
+  const request = ++detailTextRequest;
+  const isCurrent = () => request === detailTextRequest && selectedMod === mod;
+
+  detailNameTranslated.classList.add('hidden');
+  detailDescTranslated.classList.add('hidden');
+  detailDescStatus.classList.remove('error');
+  detailDescStatus.textContent = '';
+  updateDescToggle();
+
+  let desc = mod.description || '';
+  const steamDesc = await getSteamDescription(mod);
+  if (!isCurrent()) return;
+  if (steamDesc) desc = steamDesc;
+  detailDescEl.textContent = desc || t('detail.noDescription');
+  const sourceNote = steamDesc ? t('translate.steamPage') : '';
+  detailDescStatus.textContent = sourceNote;
+
+  const texts = [];
+  if (translateNameCb.checked && mod.displayName) texts.push(mod.displayName);
+  if (translateDescCb.checked && desc) texts.push(desc);
+  if (texts.length === 0) return;
+
+  const sl = translateFromSel.value;
+  const tl = translateToSel.value;
+  detailDescStatus.textContent = [sourceNote, t('translate.translating')].filter(Boolean).join(' · ');
+
+  let results;
+  try {
+    results = await translateCached(texts, sl, tl);
+  } catch {
+    if (!isCurrent()) return;
+    detailDescStatus.textContent = [sourceNote, t('translate.failed')].filter(Boolean).join(' · ');
+    detailDescStatus.classList.add('error');
+    return;
+  }
+  if (!isCurrent()) return;
+
+  let i = 0;
+  if (translateNameCb.checked && mod.displayName) {
+    const name = results[i++].text.trim();
+    if (name && name !== mod.displayName) {
+      detailNameTranslated.textContent = name;
+      detailNameTranslated.classList.remove('hidden');
+    }
+  }
+  if (translateDescCb.checked && desc) {
+    const r = results[i++];
+    detailDescTranslated.textContent = r.text;
+    detailDescTranslated.classList.remove('hidden');
+    const from = translateLangName(r.detected || sl);
+    detailDescStatus.textContent = [sourceNote, `${from} → ${translateLangName(tl)}`].filter(Boolean).join(' · ');
+  } else {
+    detailDescStatus.textContent = sourceNote;
+  }
+  updateDescToggle();
+}
+
 // ===== Detail Panel =====
 
 function updateDetailPanel() {
@@ -3383,23 +3704,13 @@ function updateDetailPanel() {
   document.getElementById('detail-source').textContent = selectedMod.source === 'steam' ? t('detail.sourceStream') : t('detail.sourceLocal');
   document.getElementById('detail-path').textContent = selectedMod.filePath;
   document.getElementById('detail-desc').textContent = selectedMod.description || t('detail.noDescription');
+  refreshDetailText(selectedMod);
 
   const depsRow = document.getElementById('detail-deps-row');
   const depsEl = document.getElementById('detail-deps');
   if (selectedMod.dependencies && selectedMod.dependencies.length > 0) {
     depsRow.classList.remove('hidden');
-    depsEl.innerHTML = '';
-    for (const dep of selectedMod.dependencies) {
-      const installed = isDepInstalled(dep);
-      const span = document.createElement('span');
-      span.textContent = dep;
-      if (!installed) {
-        span.className = 'dep-missing';
-        span.title = t('deps.notInstalledTooltip');
-      }
-      if (depsEl.childNodes.length > 0) depsEl.appendChild(document.createTextNode(', '));
-      depsEl.appendChild(span);
-    }
+    fillDepList(depsEl, selectedMod, selectedMod.dependencies);
   } else {
     depsRow.classList.add('hidden');
   }
@@ -3408,18 +3719,7 @@ function updateDetailPanel() {
   const refsEl = document.getElementById('detail-refs');
   if (selectedMod.references && selectedMod.references.length > 0) {
     refsRow.classList.remove('hidden');
-    refsEl.innerHTML = '';
-    for (const ref of selectedMod.references) {
-      const installed = isDepInstalled(ref);
-      const span = document.createElement('span');
-      span.textContent = ref;
-      if (!installed) {
-        span.className = 'dep-missing';
-        span.title = t('deps.notInstalledTooltip');
-      }
-      if (refsEl.childNodes.length > 0) refsEl.appendChild(document.createTextNode(', '));
-      refsEl.appendChild(span);
-    }
+    fillDepList(refsEl, selectedMod, selectedMod.references);
   } else {
     refsRow.classList.add('hidden');
   }
@@ -3439,17 +3739,15 @@ function updateDetailPanel() {
   // "Needed by" — mods that depend on the selected mod
   const neededByRow = document.getElementById('detail-needed-by-row');
   const neededByEl = document.getElementById('detail-needed-by');
-  const selLower = selectedMod.filename.toLowerCase();
-  const dependents = mods.filter((m) => {
-    const allDeps = (m.dependencies || []).concat(m.references || []);
-    return allDeps.some((d) => selLower.includes(d.toLowerCase()));
-  });
+  const dependents = mods.filter((m) => m !== selectedMod && needsMod(m, selectedMod));
   if (dependents.length > 0) {
     neededByRow.classList.remove('hidden');
-    neededByEl.textContent = dependents.map((m) => m.displayName).join(', ');
+    fillDependents(neededByEl, selectedMod, dependents);
   } else {
     neededByRow.classList.add('hidden');
   }
+
+  updateDetailExtras(selectedMod);
 
   // Update conflicts tab if it's active
   if (tabConflicts.classList.contains('active')) {
@@ -3503,7 +3801,7 @@ function renderConflictsTab() {
 
   placeholder.classList.add('hidden');
 
-  const modConflicts = conflictData.modConflicts[selectedMod.filename];
+  const modConflicts = conflictData.modConflicts[selectedMod.realFile];
 
   if (!modConflicts || modConflicts.length === 0) {
     title.textContent = `${selectedMod.displayName} — Conflicts`;
@@ -3519,7 +3817,7 @@ function renderConflictsTab() {
 
   for (const c of modConflicts) {
     for (const m of c.allMods) {
-      if (m.filename === selectedMod.filename) continue;
+      if (m.filename === selectedMod.realFile) continue;
       if (!byMod[m.filename]) {
         byMod[m.filename] = { conflicts: [], loadOrder: m.loadOrder };
       }
@@ -3538,9 +3836,9 @@ function renderConflictsTab() {
     const displayName = otherMod.replace(/\.mod$/i, '');
 
     // Categorize conflicts by winner
-    const greenConflicts = info.conflicts.filter((c) => c.winner === selectedMod.filename);
+    const greenConflicts = info.conflicts.filter((c) => c.winner === selectedMod.realFile);
     const redConflicts = info.conflicts.filter((c) => c.winner === otherMod);
-    const deadConflicts = info.conflicts.filter((c) => c.winner !== selectedMod.filename && c.winner !== otherMod);
+    const deadConflicts = info.conflicts.filter((c) => c.winner !== selectedMod.realFile && c.winner !== otherMod);
 
     // Dropdown container
     const dropdown = document.createElement('div');
@@ -3811,9 +4109,31 @@ function syncLangSelects(locale) {
   if (tutorialLangSelect) tutorialLangSelect.value = locale;
 }
 
+const APP_MENU_KEYS = [
+  'file', 'quit', 'edit', 'undo', 'redo', 'cut', 'copy', 'paste', 'selectAll',
+  'view', 'reload', 'forceReload', 'devTools', 'resetZoom', 'zoomIn', 'zoomOut', 'fullscreen', 'menuBar',
+  'moveMenu', 'window', 'minimize', 'zoom', 'rememberWindow', 'close', 'help', 'github', 'steamGuide', 'discord',
+];
+
+// The window menu lives in the main process; send it labels in the UI language.
+function updateAppMenu() {
+  const labels = {};
+  for (const key of APP_MENU_KEYS) labels[key] = t('menu.' + key);
+  labels.fileItems = menuItemsWithKeys(fileMenuItems());
+  labels.editItems = menuItemsWithKeys(editMenuItems());
+  labels.moveItems = menuItemsWithKeys(moveMenuItems());
+  labels.helpItems = menuItemsWithKeys(helpMenuItems());
+  window.api.setAppMenu(labels);
+}
+
 async function changeLanguage(locale) {
   await setLocale(locale);
   syncLangSelects(locale);
+  window.api.kmtLang(locale).catch(() => {}); // the translator window follows
+  updateAppMenu();
+  updateLaunchButton();
+  fillTranslateControls();
+  if (selectedMod) refreshDetailText(selectedMod);
   if (uncategorizedPinned) {
     pinUncatBtn.textContent = t('toolbar.unpinUncat');
   } else {
@@ -3821,7 +4141,9 @@ async function changeLanguage(locale) {
   }
   if (config) {
     config.language = locale;
+    localizeCategoryNames();
     persistConfig();
+    if (!mainScreen.classList.contains('hidden')) renderColumns();
   }
 }
 
@@ -3840,7 +4162,11 @@ async function init() {
   // Init i18n with saved language or default to English
   const savedLang = (config && config.language) || 'en';
   await initI18n(savedLang);
+  BOOT.text(t('boot.loading'));
+  BOOT.step(10, t('boot.config'));
   syncLangSelects(savedLang);
+  updateAppMenu();
+  fillTranslateControls();
 
   if (config && config.gamePath) {
     categories = config.categories || [];
@@ -3848,7 +4174,11 @@ async function init() {
     modOrders = config.modOrders || {};
     if (typeof config.mapZoomSpeed === 'number') mapZoomSpeed = config.mapZoomSpeed;
     if (typeof config.columnScrollSpeed === 'number') columnScrollSpeed = config.columnScrollSpeed;
-    uncategorizedPinned = config.uncategorizedPinned || false;
+    if (typeof config.columnScrollSpeedV === 'number') columnScrollSpeedV = config.columnScrollSpeedV;
+    // The old pinned Uncategorized side panel is gone: Uncategorized is a normal column now.
+    uncategorizedPinned = false;
+    if (config.orderPanelWidth) document.getElementById('order-panel').style.width = config.orderPanelWidth + 'px';
+    if (config.zoomFactor && config.zoomFactor !== 1) window.api.setZoom(config.zoomFactor);
     if (uncategorizedPinned) {
       pinUncatBtn.classList.add('btn-pinned-active');
       pinUncatBtn.textContent = t('toolbar.unpinUncat');
@@ -3863,17 +4193,28 @@ async function init() {
       tutorialModal.classList.remove('hidden');
     }
     ensureDefaultCategories();
+    localizeCategoryNames();
+    applyColumnWidth();
+    applyPanelFold(); // (panel-fold.js)
     showMainScreen();
     autoCheckForUpdate();
   } else {
     config = config || { categories: [], modCategories: {}, modOrders: {} };
+    categories = config.categories || [];
+    modCategories = config.modCategories || {};
+    modOrders = config.modOrders || {};
     // Default to Kenshi theme on first launch
     document.body.classList.add('kenshi-theme');
     themeToggleCb.checked = true;
     ensureDefaultCategories();
+    localizeCategoryNames();
     setupScreen.classList.remove('hidden');
+    BOOT.done();
     autoDetect();
   }
 }
 
-init();
+// After every script has loaded: with no config file yet, getConfig answers before
+// editing.js has run, and init would call its functions too early (blank window).
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init, { once: true });
+else init();

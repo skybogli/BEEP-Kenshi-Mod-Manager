@@ -2,6 +2,10 @@
 
 **Beep Enhances Every Playthrough**
 
+> **Enhanced Edition** — a fork of [BEEP Kenshi Mod Manager](https://github.com/Derthi/BEEP-Kenshi-Mod-Manager) by Derthi (MIT License),
+> modified by skybogli: convenience features (mod list viewer, list share strings, selection and panel tweaks)
+> and a built-in translation / patch tool. Original work © 2026 Derthi, modifications © 2026 skybogli — see [LICENSE](LICENSE).
+
 A Electron-based mod load order manager for [Kenshi](https://store.steampowered.com/app/233860/Kenshi/). Works with both **Steam** and **GOG** installations. Organize your mods into categories, detect conflicts at every level, visualize them on the world map, and get AI-assisted sorting suggestions.
 
 [Steam Workshop Guide](https://steamcommunity.com/sharedfiles/filedetails/?id=3704937622)
@@ -73,7 +77,31 @@ A Electron-based mod load order manager for [Kenshi](https://store.steampowered.
 - **Launch game** — Save your load order and launch Kenshi directly from the app.
 - **GitHub link** — Quick access to the project repository from the toolbar.
 
-## Install
+### Load order panel & editing (1.2.14)
+- **Actual load order panel** on the left (details moved to the right): the mods that are on, in the order Kenshi loads them, coloured by category. Drag there to put a mod at a position — it joins the category it lands in.
+- **Unsaved changes**: the Save button shows `*` while the load order differs from mods.cfg; closing asks to save, and Refresh goes back to the last saved state.
+- **Keyboard editing**: Ctrl+A select all, Ctrl+X / Ctrl+V move & paste, Shift+↑/↓ one step, Shift+←/→ previous/next category, Ctrl+Shift+↑/↓ top/bottom, Ctrl+Shift+←/→ first/last category, Ctrl+Shift+Alt+←/→ move the category itself (Home / End: to the front / back), F8 / Shift+F8 next / previous mod with a problem, Ctrl+F search, Ctrl+S save. In the File, Edit and Move menus. Also in the Edit menu.
+- **Sort rules**: a default rule and per-category rules (direction, character priority, mods that are on first), by each mod's original name, with optional auto sort. A sort that changes the load order asks first.
+- **Category headers**: ✎ rename, ⇅ sort, drag the header to reorder, right-click menu with sort and move entries.
+- **Busy overlay** while checking conflicts or fetching Steam descriptions; **Alt+H** opens the tutorial, **Alt+M** the Workshop tab.
+- Build without Node: `python tools/build.py` (copies the v1.2.13 runtime, packs this source, and saves a source copy in `Source Code\BEEP-Kenshi-Mod-Manager-v<version>`).
+
+### 📌 pins, layouts & settings (1.2.15)
+- **Actual load order with 📌 pins** (as in ARK Mod Manager): loading keeps mods.cfg exactly and pins only the mods that differ from the categories. Dragging in the load order panel / Send to # / Shift+arrows there place a mod and pin it (its category stays). Right-click: *Pin at current position* / *Unpin*; ⟲ above the panel unpins all.
+- **Uncategorized** is a normal column, by default on the left, and can be moved like the others.
+- **Moving a category** (◀ ▶, header drag, Ctrl+Shift+Alt+←/→) moves its mods in the load order; if some are pinned, you choose to move them along or keep them in place. Sorting asks whether to apply to the actual order or sort the category only.
+- **⚙ Settings** (far right, Ctrl+,): language, Kenshi folders, map zoom / column scroll speed, **category width** (default 300px, wider than before), and the **category layout**: by Workshop tags, BEEP defaults or your own list (move / remove / add), auto classify by Steam Workshop tags (leftmost category first), keep the current load order, and Reset categories. Default category names follow the UI language.
+
+### Settings & counts (1.2.16)
+- Undo / Redo buttons show how many steps are left.
+- ⚙ Settings: Kenshi folders (auto-detect, browse, clear) right in the dialog; separate up/down and left/right category scroll speed (up to 4×); changes are kept with **Save**, and closing with unsaved changes asks first.
+- "Uncategorized" and the Mods Folder / LinkMods / UnlinkMods buttons follow the UI language (Korean added).
+
+### Detail panel & same-name mods (1.2.17–1.2.18)
+- Detail panel: **Steam page**, **Install folder** and **Workshop folder** buttons, plus the mod's Workshop tags.
+- Copies of a `.mod` with the same file name (e.g. a local copy and Workshop subscriptions) are separate entries: each can be placed, moved, sorted and pinned on its own. mods.cfg only stores names, so only one copy of a name can be on — turning one on turns the others off, and which one is remembered. The card shows `×2`; the detail panel lists the other copies.
+- Export writes `name|active` and, for a second copy, `|source:folder` (older versions ignore it); import puts each copy back.
+- Alt+M / Help → Steam Workshop opens the Workshop in the browser.
 
 ### From release (recommended)
 
