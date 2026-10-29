@@ -370,10 +370,11 @@ const MAX_LINES = 20000;
 function lineClass(t) {
   if (t.startsWith('# [')) return 'l-sid';
   if (t.startsWith('====')) return 'l-head';
-  if (/^\[(오류|실패)\]|\[실패\]|^\[중지\]/.test(t)) return 'l-err';
-  if (/^\[(경고|주의|안내)\]|\[대기\]/.test(t)) return 'l-warn';
-  if (/^저장 완료|^\[완료\]|^완료 -|검증 통과/.test(t)) return 'l-ok';
-  if (/구글 번역:/.test(t)) return 'l-google';
+  // (the log is in the manager's language: lib/kmt/lang.js)
+  if (/^\[(오류|실패|Error|Failed)\]|\[(실패|Failed)\]|^\[(중지|Stopped)\]/.test(t)) return 'l-err';
+  if (/^\[(경고|주의|안내|Warning|Caution|Note)\]|\[(대기|Waiting)\]/.test(t)) return 'l-warn';
+  if (/^저장 완료|^\[완료\]|^완료 -|검증 통과|^Saved: |^\[Done\]|^Done - |check passed/.test(t)) return 'l-ok';
+  if (/구글 번역:|\] Google: /.test(t)) return 'l-google';
   return '';
 }
 function appendLog(lines) {

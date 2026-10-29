@@ -11,7 +11,8 @@ const STATUS_INFO = (() => {
   const chip = (it) => {
     let attr = '';
     if (it.act) { attr = ` data-i="${acts.length}"`; acts.push(it.act); }
-    return `<span class="sb-item${it.cls ? ' sb-' + it.cls : ''}"${attr} title="${SB.esc(it.tip || '')}">${SB.esc(it.text)}</span>`;
+    // it.icon: an app's own inline SVG (not user text), before the text
+    return `<span class="sb-item${it.cls ? ' sb-' + it.cls : ''}"${attr} title="${SB.esc(it.tip || '')}">${it.icon || ''}${SB.esc(it.text)}</span>`;
   };
   const group = (items) => items.map(chip).join('<span class="sb-dot">·</span>');
   const alerts = () => {
@@ -37,6 +38,7 @@ const STATUS_INFO = (() => {
     const n = SB.counts();
     const counts = [
       { text: t('sb.total', { n: n.total }), tip: t('sb.totalTip') },
+      ...(SB.marks ? SB.marks() : []), // (new / updated / translation marks, where the app has them — a click selects them and clears the marks)
       { text: t('sb.on', { n: n.on }), tip: t('sb.onTip') },
       { text: t('sb.sel', { n: n.selected }), tip: t('sb.selTip'), cls: n.selected ? '' : 'dim' },
     ];

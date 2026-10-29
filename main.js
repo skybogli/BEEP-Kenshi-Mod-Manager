@@ -250,6 +250,9 @@ ipcMain.handle('delete-pack', (_event, packName) => {
   configStore.deletePack(packsBasePath, packName);
 });
 
+// An auto preset no longer kept: to the Recycle Bin (never a preset the user saved).
+ipcMain.handle('trash-pack', (_event, packName) => configStore.trashAutoPack(packsBasePath, packName, (p) => shell.trashItem(p)));
+
 // Steam API
 ipcMain.handle('fetch-workshop-details', (_event, workshopIds) => {
   return steamApi.fetchWorkshopDetails(workshopIds);

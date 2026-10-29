@@ -44,6 +44,8 @@ const POP = (() => {
       if (it.tip) row.title = it.tip;
       row.innerHTML = `<span class="pop-check">${it.check ? '✓' : ''}</span><span class="pop-text"></span><span class="pop-keys">${it.sub ? '▸' : ''}</span>`;
       row.querySelector('.pop-text').textContent = it.text;
+      // it.icon: the app's own inline SVG (the column buttons' icons), before the text
+      if (it.icon) row.querySelector('.pop-text').insertAdjacentHTML('afterbegin', `<span class="pop-icon">${it.icon}</span>`);
       if (it.keys) row.querySelector('.pop-keys').textContent = it.keys;
       row.addEventListener('mouseenter', () => {
         if (openSub === row) return;
@@ -200,8 +202,8 @@ function categoryMenu(catId, x, y) {
     { text: '⏭ ' + CM.t(vertical ? 'cm.moveBottom' : 'cm.moveLast'), keys: CM.keys('colLast'), disabled: i >= last, fn: () => CM.moveTo(catId, last) },
     fit && 'sep',
     fit && { heading: CM.t('cm.widthHead') },
-    fit && { text: '→← ' + CM.t('cm.shrink'), check: fit === 'shrink', fn: () => CM.toggleFit(catId, 'shrink') },
-    fit && { text: '⇼ ' + CM.t('cm.expand'), check: fit === 'expand', fn: () => CM.toggleFit(catId, 'expand') },
+    fit && { icon: SHRINK_ICON, text: CM.t('cm.shrink'), check: fit === 'shrink', fn: () => CM.toggleFit(catId, 'shrink') },
+    fit && { icon: EXPAND_ICON, text: CM.t('cm.expand'), check: fit === 'expand', fn: () => CM.toggleFit(catId, 'expand') },
   ];
   const modItems = [
     links && links.link.length && { text: '🔗 ' + CM.t('cm.linkAll') + n(links.link.length), fn: () => CM.link(links.link) },

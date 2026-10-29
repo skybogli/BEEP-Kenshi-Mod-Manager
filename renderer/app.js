@@ -226,6 +226,7 @@ async function loadMods() {
     mods = assignModKeys(await window.api.discoverMods(config));
     BOOT.step(60, t('boot.found', { count: mods.length }));
     noteNewlyInstalled(); // ghost cards (editing.js) whose mod is there now
+    MARKS.scan(); // 🆕 ⟳ 🌐 (editing.js)
     applyCategoriesToMods();
 
     // Check symlink status for steam mods
@@ -535,6 +536,7 @@ saveBtn.addEventListener('click', async () => {
     markSaved(ordered);
     newlyInstalled = new Set();
     setStatus(t('status.saved'), 'success');
+    autoPackAfterSave();
   } else {
     setStatus(t('status.saveError', { error: result.error }), 'error');
   }
@@ -612,6 +614,7 @@ async function launchGame(mode) {
     return;
   }
   markSaved(ordered);
+  autoPackAfterSave();
 
   const launchResult = await window.api.launchGame(config.gamePath, mode);
   if (launchResult.success) {
@@ -755,8 +758,9 @@ const importListBtn = document.getElementById('import-list-btn');
 // What an export holds. The Export button (and Ctrl+E) takes everything; Advanced export
 // (a long press, ▾, Ctrl+Shift+E) chooses: scope 'all' | 'active' | 'selected'; missing —
 // mods that aren't installed too; cats — the categories and places (else one plain list);
-// emptyCats — categories with none of the mods; pins — the actual load order (📌).
-const EXPORT_ALL = { scope: 'all', missing: true, cats: true, emptyCats: true, pins: true };
+// emptyCats — categories with none of the mods; pins — the actual load order (📌); memo — the
+// mods' 📝 notes (off unless chosen: they're the user's own).
+const EXPORT_ALL = { scope: 'all', missing: true, cats: true, emptyCats: true, pins: true, memo: false };
 
 // A mod as it is meant to be: one that isn't installed counts as it should be once installed.
 function exportIsOn(mod) {
@@ -2286,18 +2290,18 @@ function createColumn(catId, name, color, globalOrder) {
 
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
-    headerRow1.append(headerSpacer(), deleteBtn);
-    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, headerSpacer(), headerNoLoadButton(catId), ...headerFitButtons(catId), headerSortButton(catId));
+    headerRow1.append(headerSpacer(), headerNoLoadButton(catId), deleteBtn);
+    headerRow2.append(headerCb, moveUp, moveDown, colorBtn, minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   } else {
     const headerRow1 = document.createElement('div');
     headerRow1.className = 'column-header-row';
-    headerRow1.append(headerName, headerCount);
+    headerRow1.append(headerName, headerCount, headerSpacer(), headerNoLoadButton(catId)); // 🚫 where the others have it, by ✕
 
     const headerRow2 = document.createElement('div');
     headerRow2.className = 'column-header-row';
-    headerRow2.append(headerCb, ...headerMoveButtons(catId), minimizeBtn, headerSpacer(), headerNoLoadButton(catId), ...headerFitButtons(catId), headerSortButton(catId));
+    headerRow2.append(headerCb, ...headerMoveButtons(catId), minimizeBtn, headerSpacer(), ...headerFitButtons(catId), headerSortButton(catId));
 
     header.append(headerRow1, headerRow2);
   }
@@ -2499,6 +2503,7 @@ function createModCard(mod, catColor, globalOrder) {
 
   // Click to select (with multi-select support)
   card.addEventListener('click', (e) => {
+    MARKS.ack([mod.filename]); // its 🆕 ⟳ 🌐 go (editing.js)
     if (e.shiftKey && lastClickedMod) {
       // Shift+click: range select within the same category
       const catMods = getModsForCategory(mod.category);
@@ -3110,9 +3115,16 @@ const packsList = document.getElementById('packs-list');
 savePackBtn.addEventListener('click', async () => {
   const name = await showInputModal(t('packs.savePrompt'), '');
   if (!name || !name.trim()) return;
+  const pack = buildPack(name.trim());
+  await window.api.savePack(pack);
+  setStatus(t('status.packSaved', { name: pack.name }), 'success');
+  refreshPacksList();
+});
 
-  const pack = {
-    name: name.trim(),
+// The preset of the current state (saved by the user, or an auto preset).
+function buildPack(name) {
+  return {
+    name,
     savedAt: new Date().toISOString(),
     categories: JSON.parse(JSON.stringify(categories)),
     modCategories: { ...modCategories },
@@ -3130,17 +3142,41 @@ savePackBtn.addEventListener('click', async () => {
     sortDefault: structuredClone(config.sortDefault ?? null),
     uncatSort: structuredClone(config.uncatSort ?? null),
   };
+}
 
-  await window.api.savePack(pack);
-  setStatus(t('status.packSaved', { name: pack.name }), 'success');
-  refreshPacksList();
-});
+// ===== Auto presets =====
+// With "auto presets" on (Settings), a save to the game leaves a preset "Auto save <date time>"
+// (auto: true), unless it is the same as the newest one. The newest AUTO_PACK_KEEP are kept, older
+// ones go to the Recycle Bin. The user's own presets are never touched.
+const AUTO_PACK_KEEP = 10;
+const packContent = (p) => { const { name, savedAt, auto, ...rest } = p; return JSON.stringify(rest); };
+
+async function autoPackAfterSave() {
+  if (!config?.autoPreset) return;
+  try {
+    const packs = await window.api.getPacks();
+    const autos = packs.filter((p) => p.auto).sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
+    const d = new Date();
+    const p2 = (v) => String(v).padStart(2, '0');
+    const base = t('autoPack.name', { time: `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())} ${p2(d.getHours())}:${p2(d.getMinutes())}` });
+    const names = new Set(packs.map((p) => p.name));
+    let name = base;
+    for (let i = 2; names.has(name); i++) name = `${base} (${i})`;
+    const pack = { ...buildPack(name), auto: true };
+    if (autos[0] && packContent(autos[0]) === packContent(pack)) return;
+    await window.api.savePack(pack);
+    for (const old of autos.slice(AUTO_PACK_KEEP - 1)) await window.api.trashPack(old.name);
+    if (tabPacks.classList.contains('active')) refreshPacksList();
+  } catch (e) {
+    console.warn('auto preset:', e);
+  }
+}
 
 async function refreshPacksList() {
-  const packs = await window.api.getPacks();
+  const all = await window.api.getPacks();
   packsList.innerHTML = '';
 
-  if (packs.length === 0) {
+  if (all.length === 0) {
     const empty = document.createElement('div');
     empty.className = 'detail-placeholder';
     empty.textContent = t('packs.noPacks');
@@ -3149,7 +3185,16 @@ async function refreshPacksList() {
     return;
   }
 
+  // The user's own presets, then the auto presets (newest first) under a grey heading.
+  const autos = all.filter((p) => p.auto).sort((a, b) => String(b.savedAt).localeCompare(String(a.savedAt)));
+  const packs = [...all.filter((p) => !p.auto), ...autos];
   for (const pack of packs) {
+    if (pack === autos[0]) {
+      const head = document.createElement('div');
+      head.className = 'pack-group-head';
+      head.textContent = t('autoPack.heading');
+      packsList.appendChild(head);
+    }
     const item = document.createElement('div');
     item.className = 'pack-item';
 
@@ -3186,10 +3231,63 @@ async function refreshPacksList() {
       setStatus(t('status.packDeleted', { name: pack.name }), 'success');
     });
 
-    actions.append(loadBtn, delBtn);
+    const cmpBtn = document.createElement('button');
+    cmpBtn.className = 'btn';
+    cmpBtn.textContent = t('packCmp.btn');
+    cmpBtn.title = t('packCmp.btnTip');
+    cmpBtn.addEventListener('click', () => comparePacks(pack, packs));
+
+    actions.append(loadBtn, cmpBtn, delBtn);
     item.append(info, actions);
     packsList.appendChild(item);
   }
+}
+
+// ===== Compare presets =====
+// A preset next to the current state or another preset: the mods on in only one of them, and how
+// many of the mods on in both load in another order.
+function packSide(pack) {
+  if (!pack) {
+    const on = mods.filter((m) => m.active && !m.missing);
+    return { keys: on.map((m) => m.filename), order: loadOrderFiles() };
+  }
+  // keys: newer presets keep the file paths of the mods (copies apart), older ones the file names
+  const byPath = new Map(mods.filter((m) => m.filePath).map((m) => [m.filePath, m.filename]));
+  const keyOf = (k) => (k.startsWith('missing:') ? k.slice(8) : byPath.get(k) || k.split(/[\\/]/).pop());
+  const keys = (pack.active || pack.activeMods || []).map(keyOf);
+  return { keys, order: (pack.order || pack.activeMods || []).map((k) => (String(k).includes('\\') ? keyOf(k) : k)) };
+}
+
+function comparePacks(pack, packs) {
+  const { box, close } = openWideModal('km-pack-cmp');
+  let other = ''; // '' = the current state, else the other preset's name
+  const label = (k) => modByFile(k)?.displayName || String(k).replace(/\.mod$/i, '');
+  const draw = () => {
+    const a = packSide(pack);
+    const b = packSide(other ? packs.find((p) => p.name === other) : null);
+    const inA = new Set(a.keys), inB = new Set(b.keys);
+    const onlyA = a.keys.filter((k) => !inB.has(k)).map(label).sort((x, y) => x.localeCompare(y));
+    const onlyB = b.keys.filter((k) => !inA.has(k)).map(label).sort((x, y) => x.localeCompare(y));
+    // the mods on in both: the ones whose place among them differs
+    const both = (list) => list.filter((k) => inA.has(k) && inB.has(k));
+    const oa = both(a.order), ob = both(b.order);
+    const moved = oa.length === ob.length ? oa.filter((k, i) => ob[i] !== k).length : 0;
+    const bName = other || t('packCmp.current');
+    const col = (title, list) => `<div class="pack-cmp-col"><div class="pack-cmp-head">${escapeText(title)} <span class="km-muted">${list.length}</span></div>
+      ${list.length ? `<ul>${list.map((n) => `<li>${escapeText(n)}</li>`).join('')}</ul>` : `<div class="km-muted">${escapeText(t('packCmp.none'))}</div>`}</div>`;
+    box.innerHTML = `<div class="modal-title">${escapeText(t('packCmp.title'))}</div>
+      <div class="pack-cmp-pick"><b>${escapeText(pack.name)}</b> ↔
+        <select class="modal-input km-narrow" data-r="other">
+          <option value="" ${other ? '' : 'selected'}>${escapeText(t('packCmp.current'))}</option>
+          ${packs.filter((p) => p.name !== pack.name).map((p) => `<option value="${escapeText(p.name)}" ${p.name === other ? 'selected' : ''}>${escapeText(p.name)}</option>`).join('')}
+        </select></div>
+      <div class="pack-cmp-cols">${col(t('packCmp.onlyIn', { name: pack.name }), onlyA)}${col(t('packCmp.onlyIn', { name: bName }), onlyB)}</div>
+      <div class="km-muted">${escapeText(!onlyA.length && !onlyB.length && !moved ? t('packCmp.same') : t('packCmp.moved', { n: moved }))}</div>
+      <div class="modal-buttons"><button class="btn btn-primary" data-r="close">${escapeText(t('exp.close'))}</button></div>`;
+  };
+  box.addEventListener('change', (e) => { if (e.target.dataset.r === 'other') { other = e.target.value; draw(); } });
+  box.addEventListener('click', (e) => { if (e.target.closest('[data-r="close"]')) close(); });
+  draw();
 }
 
 async function applyPack(pack) {
@@ -3824,6 +3922,7 @@ async function refreshDetailText(mod) {
 
 function updateDetailPanel() {
   const placeholder = detailPanel.querySelector('.detail-placeholder');
+  MEMO.show(selectedMod); // 📝 (editing.js)
 
   if (!selectedMod) {
     placeholder.classList.remove('hidden');

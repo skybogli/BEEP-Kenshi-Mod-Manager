@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('api', {
   getPacks: () => ipcRenderer.invoke('get-packs'),
   savePack: (pack) => ipcRenderer.invoke('save-pack', pack),
   deletePack: (name) => ipcRenderer.invoke('delete-pack', name),
+  trashPack: (name) => ipcRenderer.invoke('trash-pack', name),
   fetchWorkshopDetails: (ids) => ipcRenderer.invoke('fetch-workshop-details', ids),
   translateTexts: (texts, sl, tl) => ipcRenderer.invoke('translate-texts', texts, sl, tl),
   loadModDatabase: () => ipcRenderer.invoke('load-mod-database'),

@@ -1255,6 +1255,7 @@ window.api.onConfirmClose(async () => {
       setStatus(t('status.saveError', { error: result.error }), 'error');
       return;
     }
+    await autoPackAfterSave(); // (app.js; before the window goes)
   } else if (choice === 'discard') {
     if (savedLayout) restoreLayout(savedLayout); // the categories go back too
   } else {
@@ -2012,9 +2013,13 @@ function exportDataLine(list = mods, o = EXPORT_ALL) {
   const files = new Set(list.map((m) => m.realFile));
   // 🚫 categories by name (Uncategorized as 'Uncategorized'), when the categories come along
   const noLoad = o.cats ? orderedCatIds().filter(catNoLoad).map((id) => (id === UNCATEGORIZED ? 'Uncategorized' : catById(id).name)) : [];
+  // 📝 notes of these mods, when chosen (older versions ignore them)
+  const notes = {};
+  if (o.memo) for (const m of list) { const text = MEMO.get(m.filename); if (text) notes[m.filename] = text; }
   return EXPORT_DATA_PREFIX + JSON.stringify({
     v: 1, savedAt: Date.now(), scope: o.scope, ...(o.cats ? { noLoad } : { noCats: true }),
     ...(o.pins ? { order: loadOrderFiles().filter((f) => files.has(f)) } : {}), ws,
+    ...(Object.keys(notes).length ? { notes } : {}),
   });
 }
 
@@ -2051,6 +2056,7 @@ function parseImportText(content) {
   if (data.noCats) src.cats = null;
   src.scope = data.scope || null;
   src.noLoad = Array.isArray(data.noLoad) ? data.noLoad : null; // 🚫 categories (older files: none said)
+  src.notes = data.notes && typeof data.notes === 'object' && !Array.isArray(data.notes) ? data.notes : null; // 📝
   return src.entries.length ? src : null;
 }
 
@@ -2190,7 +2196,9 @@ function importPreview(src) {
     return v;
   };
   const presetDefaults = () => ({ keepOff: false, keepOn: false, turnOn: false, offAbsent: !!src.listOnly || src.scope === 'active' });
-  const opts = { ...presetValues('all'), newOn: 'file', ...presetDefaults() };
+  // 📝 notes in the file: filled in where I have none (notesOver: replace mine too)
+  const opts = { ...presetValues('all'), newOn: 'file', ...presetDefaults(), notes: true, notesOver: false };
+  const noteCount = Object.keys(src.notes || {}).filter((k) => modByFile(k)).length;
   const preset = () => Object.keys(IMPORT_PRESETS).find((p) => !(listFile && p === 'fill')
     && ['place', 'onoff', 'missingTo'].every((k) => opts[k] === presetValues(p)[k])) || 'custom';
   let detailsOpen = !!config?.importDetailsOpen;
@@ -2270,6 +2278,7 @@ function importPreview(src) {
           <span>${escapeText(t('imp.loadWhen'))}</span>
           ${['file', 'off'].map((v) => `<label><input type="radio" name="imp-on" value="${v}" ${opts.newOn === v ? 'checked' : ''} ${opts.missingTo === 'none' ? 'disabled' : ''}> ${escapeText(t(v === 'file' ? 'imp.load.on' : 'imp.load.off'))}</label>`).join('')}
         </div>
+        ${noteCount ? `<div class="imp-opt-row"><b>${escapeText(t('memo.impTitle', { n: noteCount }))}</b>${check('notes', t('memo.impTake'))}${check('notesOver', t('memo.impOver'), !opts.notes)}</div>` : ''}
         <details class="imp-details" ${detailsOpen ? 'open' : ''}>
           <summary><b>${escapeText(t('imp.details'))}</b> <span class="km-muted">${escapeText([t('imp.sum.place.' + opts.place), t('imp.sum.onoff.' + opts.onoff), t('imp.sum.missing.' + opts.missingTo)].join(' · '))}</span></summary>
           <div class="imp-detail-row"><span class="imp-detail-lbl">${escapeText(t('imp.d.place'))}</span>${radio('imp-place', opts.place, [['file', 'imp.v.file'], ['keep', 'imp.v.keep']])}</div>
@@ -2606,7 +2615,8 @@ async function applyImport(src, opts = {}) {
   importMarks = marks;
   await persistConfig();
   renderColumns();
-  setStatus(t('imp.done', { n: marks.size + missing.length }), 'success');
+  const notesIn = o.notes !== false && src.notes ? MEMO.merge(src.notes, !!o.notesOver) : 0; // 📝
+  setStatus(t('imp.done', { n: marks.size + missing.length }) + (notesIn ? ' · ' + t('memo.imported', { n: notesIn }) : ''), 'success');
   if (missing.length) {
     const files = missing.map((it) => it.file);
     const go = await choiceModal(t('sq.title'), t('imp.subscribeAsk', { n: files.length }), [
@@ -2907,7 +2917,7 @@ let shiftAnchor = null; // { list, key }
 // or save. The last choices and the panel's place are kept (EXP.config).
 
 const EXPORT_PRESETS = {
-  backup: { format: 'app', ...EXPORT_ALL },
+  backup: { format: 'app', ...EXPORT_ALL, memo: true }, // (a backup keeps the 📝 notes too)
   share: { format: 'app', ...EXPORT_ALL, scope: 'active', emptyCats: false },
 };
 // Keys that still work while picking (the rest wait until the panel closes).
@@ -2985,6 +2995,7 @@ function exportAdvancedModal() {
           ${check('cats', t(share ? 'exp.catsShare' : 'exp.cats'))}
           ${check('emptyCats', t('exp.emptyCats'), share || !o.cats)}
           ${check(EXP.extra[0], t(EXP.extra[1]), share)}
+          ${check('memo', t('exp.memo'), share)}
         </div>
         <div class="exp-hint">${esc(t(o.scope === 'selected' ? 'exp.pickHint' : share ? 'exp.shareNote' : str ? 'exp.strHint' : o.cats ? 'exp.pickHintShort' : 'exp.noCatsNote'))}</div>
       </div>`}
@@ -3281,18 +3292,31 @@ function toggleFit(catId, kind) {
   renderColumns();
 }
 
+// Icons instead of →← / ⇼: the two glyphs made a button twice as wide, and ⇼ was hard to see.
+// Shrink: arrows in to a middle line; widen: arrows out to the two edges.
+const FIT_SVG = '<svg viewBox="0 0 12 12" width="11" height="11" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round">';
+const SHRINK_ICON = FIT_SVG + '<path d="M6 1.5v9M1 6h3.2M2.6 4.2 4.4 6 2.6 7.8M11 6H7.8M9.4 4.2 7.6 6l1.8 1.8"/></svg>';
+const EXPAND_ICON = FIT_SVG + '<path d="M1 1.5v9M11 1.5v9M3 6h6M4.8 4.2 3 6l1.8 1.8M7.2 4.2 9 6 7.2 7.8"/></svg>';
+// The same kind of line icon for the marks and memos (emoji looked out of place in the app's font).
+const KM_ICONS = {
+  new: FIT_SVG + '<path d="M6 1.2v2.6M6 8.2v2.6M1.2 6h2.6M8.2 6h2.6M2.7 2.7l1.6 1.6M7.7 7.7l1.6 1.6M9.3 2.7 7.7 4.3M4.3 7.7 2.7 9.3"/></svg>',
+  updated: FIT_SVG + '<path d="M10 5.2A4.1 4.1 0 0 0 2.6 3.6M2 6.8a4.1 4.1 0 0 0 7.4 1.6M2.4 1.6v2.2h2.2M9.6 10.4V8.2H7.4"/></svg>',
+  tr: FIT_SVG + '<circle cx="6" cy="6" r="4.6"/><path d="M1.4 6h9.2M6 1.4c1.4 1.3 2 2.9 2 4.6s-.6 3.3-2 4.6M6 1.4C4.6 2.7 4 4.3 4 6s.6 3.3 2 4.6"/></svg>',
+  memo: FIT_SVG + '<path d="M2.5 1.5h5l2 2v7h-7z"/><path d="M4.2 5.2h3.6M4.2 7.2h3.6M4.2 9.1h2.2"/></svg>',
+};
+
 // →← ⇼ in the header (before ⇅); none in the vertical layout.
 function headerFitButtons(catId) {
   if (verticalLayout) return [];
-  const make = (cls, text, tip, kind) => {
+  const make = (cls, icon, tip, kind) => {
     const b = document.createElement('span');
     b.className = 'column-move-btn km-fit-btn ' + cls;
-    b.textContent = text;
+    b.innerHTML = icon;
     b.title = t(tip);
     b.addEventListener('click', (e) => { e.stopPropagation(); toggleFit(catId, kind); });
     return b;
   };
-  return [make('km-fit-shrink', '→←', 'category.shrinkTip', 'shrink'), make('km-fit-expand', '⇼', 'category.expandTip', 'expand')];
+  return [make('km-fit-shrink', SHRINK_ICON, 'category.shrinkTip', 'shrink'), make('km-fit-expand', EXPAND_ICON, 'category.expandTip', 'expand')];
 }
 
 function headerSpacer() {
@@ -3751,6 +3775,7 @@ function settingsModal() {
     subAuto: !!config.subAuto,
     subGap: config.subGap ?? SQ_DEFAULT_GAP,
     subGapByCount: config.subGapByCount !== false,
+    autoPreset: !!config.autoPreset,
     clearExpand: false,
   });
   let saved = current();
@@ -3818,6 +3843,11 @@ function settingsModal() {
         <button class="btn btn-subbar" data-r="view-reset">${escapeText(t('settings.reset'))}</button>
       </div>
       <div class="km-settings-section">
+        <div class="km-subtitle">${escapeText(t('packs.title'))}</div>
+        <label class="km-setting-check"><input type="checkbox" id="km-auto-preset" ${draft.autoPreset ? 'checked' : ''}> ${escapeText(t('autoPack.setting', { n: AUTO_PACK_KEEP }))}</label>
+        <div class="km-muted km-setting-note">${escapeText(t('autoPack.settingNote'))}</div>
+      </div>
+      <div class="km-settings-section">
         <div class="km-subtitle">${escapeText(t('keys.title'))}</div>
         <p class="km-desc">${escapeText(t('keys.settingsDesc'))}</p>
         <button class="btn btn-subbar" data-r="shortcuts">⌨ ${escapeText(t('menu.shortcuts'))}</button>
@@ -3875,6 +3905,7 @@ function settingsModal() {
       subAuto: draft.subAuto,
       subGap: draft.subGap,
       subGapByCount: draft.subGapByCount,
+      autoPreset: draft.autoPreset,
     });
     if (draft.clearExpand) {
       for (const cat of categories) if (cat.fit === 'expand') delete cat.fit;
@@ -3919,6 +3950,7 @@ function settingsModal() {
   box.addEventListener('change', (e) => {
     if (e.target.id === 'km-lang') { draft.lang = e.target.value; refreshFooter(); }
     if (e.target.id === 'km-sub-auto') { draft.subAuto = e.target.checked; refreshFooter(); }
+    if (e.target.id === 'km-auto-preset') { draft.autoPreset = e.target.checked; refreshFooter(); }
     if (e.target.id === 'km-sub-gap-count') { draft.subGapByCount = e.target.checked; refreshFooter(); }
     if (e.target.id === 'km-sub-gap') {
       const v = Math.min(120, Math.max(0, Math.round((parseFloat(e.target.value) || 0) * 2) / 2));
@@ -4131,6 +4163,171 @@ catNavList.addEventListener('click', (e) => {
   if (item) jumpToCategory(item.dataset.cat);
 });
 
+// ===== Marks: 🆕 new mods, ⟳ updated mods, 🌐 translations to check =====
+// config.seenMods: the mod keys seen before (one not there is new until clicked). config.modStamps:
+// key -> [mtime, size] of its .mod file when last looked at (another one = updated: a Workshop
+// update, an edit). config.trSeen: translation patch key -> its original's mtime when last looked at.
+// A translation patch is <mod>_<CODE>.mod (the translator, lib/kmt): its original changed after it
+// was made = the translation may be out of date. The first run takes what is there as seen.
+// Shown on the cards and as chips next to the total (status-info.js); a click clears them.
+const MARKS = (() => {
+  const isNew = new Set(), isUpdated = new Set(), toCheck = new Map(); // key (-> original's mtime)
+  const TR_PATCH = /^(.+)_(ko|en|ja|zh|ru|de|fr|es|pt|pl|tr)\.mod$/i;
+  const same = (a, b) => Array.isArray(a) && Array.isArray(b) && a[0] === b[0] && a[1] === b[1];
+
+  // loadMods() calls this after reading the mod folders.
+  function scan() {
+    isNew.clear(); isUpdated.clear(); toCheck.clear();
+    const real = mods.filter((m) => !m.missing);
+    const stamps = (config.modStamps ||= {});
+    if (!Array.isArray(config.seenMods)) {
+      config.seenMods = real.map((m) => m.filename);
+      for (const m of real) if (m.stamp) stamps[m.filename] = m.stamp;
+      window.api.saveConfig(config); // (not persistConfig: no layout change)
+    }
+    const seen = new Set(config.seenMods);
+    let learned = false;
+    for (const m of real) {
+      if (!seen.has(m.filename)) { isNew.add(m.filename); continue; }
+      if (!m.stamp) continue;
+      if (!stamps[m.filename]) { stamps[m.filename] = m.stamp; learned = true; } // (edited by the translator)
+      else if (!same(stamps[m.filename], m.stamp)) isUpdated.add(m.filename);
+    }
+    const byReal = new Map(real.map((m) => [m.realFile.toLowerCase(), m]));
+    const trSeen = config.trSeen || {};
+    for (const m of real) {
+      const x = TR_PATCH.exec(m.realFile);
+      const orig = x && byReal.get((x[1] + '.mod').toLowerCase());
+      // (2 s: the patch is written right after the original was read)
+      if (orig?.stamp && m.stamp && orig.stamp[0] > m.stamp[0] + 2000 && trSeen[m.filename] !== orig.stamp[0]) toCheck.set(m.filename, orig.stamp[0]);
+    }
+    if (learned) window.api.saveConfig(config);
+  }
+
+  // Clicked (a card, or a chip for all of them): their marks go.
+  function ack(keys) {
+    const stamps = (config.modStamps ||= {});
+    const seen = new Set(config.seenMods || []);
+    let changed = false;
+    for (const k of keys) {
+      const m = modByFile(k);
+      if (isNew.delete(k)) { seen.add(k); changed = true; }
+      if (isUpdated.delete(k)) changed = true;
+      if (m?.stamp && !same(stamps[k], m.stamp)) { stamps[k] = m.stamp; changed = true; }
+      if (toCheck.has(k)) { (config.trSeen ||= {})[k] = toCheck.get(k); toCheck.delete(k); changed = true; }
+    }
+    if (!changed) return;
+    config.seenMods = [...seen];
+    window.api.saveConfig(config);
+    applyCards();
+    if (typeof STATUS_INFO !== 'undefined') STATUS_INFO.schedule();
+  }
+
+  // The translator changed this mod file itself: not an update.
+  function editedHere(filePath) {
+    const m = mods.find((x) => !x.missing && String(x.filePath).toLowerCase() === String(filePath).toLowerCase());
+    if (m && config.modStamps) { delete config.modStamps[m.filename]; window.api.saveConfig(config); }
+  }
+
+  function applyCards() {
+    document.querySelectorAll('.mod-card[data-filename]').forEach((card) => {
+      const k = card.dataset.filename;
+      card.querySelectorAll('.km-mark').forEach((b) => b.remove());
+      const add = (kind, tip) => {
+        const b = document.createElement('span');
+        b.className = 'km-mark km-mark-' + kind;
+        b.innerHTML = KM_ICONS[kind];
+        b.title = tip;
+        const src = card.querySelector('.card-source');
+        if (src) src.before(b); else card.append(b);
+      };
+      if (isNew.has(k)) add('new', t('mark.newTip'));
+      if (isUpdated.has(k)) add('updated', t('mark.updatedTip'));
+      if (toCheck.has(k)) add('tr', t('mark.trTip'));
+    });
+  }
+
+  // The chips next to the total (only when there are some).
+  function chips() {
+    const chip = (set, key, kind) => {
+      const keys = [...(set.keys ? set.keys() : set)].filter((k) => modByFile(k));
+      return keys.length && {
+        icon: KM_ICONS[kind], text: t(key, { n: keys.length }), tip: t(key + 'Tip', { n: keys.length }), cls: 'mark-' + kind,
+        act: () => { ack(keys); jumpToMod(modByFile(keys[0])); SEL.replace(keys); SEL.anchor(keys[0]); SEL.draw(); },
+      };
+    };
+    return [chip(isNew, 'sb.new', 'new'), chip(isUpdated, 'sb.updated', 'updated'), chip(toCheck, 'sb.trCheck', 'tr')].filter(Boolean);
+  }
+
+  return { scan, ack, editedHere, applyCards, chips };
+})();
+
+// ===== 📝 Mod memos =====
+// config.modNotes: mod key -> the user's own note. Written in the detail panel, shown as 📝 on the
+// card (the note is its tooltip). Not in presets or undo (a note isn't the layout); an Advanced
+// export can carry them ("📝 메모 포함").
+const MEMO = (() => {
+  const box = document.getElementById('detail-memo');
+  let key = null;
+  let timer = null;
+  const get = (k) => (config?.modNotes || {})[k] || '';
+
+  function save() {
+    clearTimeout(timer);
+    timer = null;
+    if (!key) return;
+    const text = box.value.replace(/\s+$/, '');
+    const notes = (config.modNotes ||= {});
+    if ((notes[key] || '') === text) return;
+    if (text) notes[key] = text; else delete notes[key];
+    window.api.saveConfig(config);
+    applyCards();
+  }
+  document.getElementById('detail-memo-icon').innerHTML = KM_ICONS.memo;
+  box.addEventListener('input', () => { clearTimeout(timer); timer = setTimeout(save, 500); });
+  box.addEventListener('blur', save);
+
+  // The detail panel shows this mod (app.js updateDetailPanel).
+  function show(mod) {
+    if (key !== mod?.filename) save();
+    key = mod && !mod.missing ? mod.filename : null;
+    box.closest('.km-memo-section').classList.toggle('hidden', !key);
+    if (key && document.activeElement !== box && !timer) box.value = get(key); // (not while a note waits to be saved)
+  }
+
+  function applyCards() {
+    document.querySelectorAll('.mod-card[data-filename]').forEach((card) => {
+      const text = get(card.dataset.filename);
+      let icon = card.querySelector('.km-memo-icon');
+      if (!text) { icon?.remove(); return; }
+      if (!icon) {
+        icon = document.createElement('span');
+        icon.className = 'km-memo-icon';
+        icon.innerHTML = KM_ICONS.memo;
+        const src = card.querySelector('.card-source');
+        if (src) src.before(icon); else card.append(icon);
+      }
+      icon.title = text;
+    });
+  }
+
+  // From an import (editing.js applyImport): fill the mods without a note, or replace them all.
+  function merge(notes, overwrite) {
+    save(); // (a note being typed is kept first)
+    const mine = (config.modNotes ||= {});
+    let n = 0;
+    for (const [k, text] of Object.entries(notes || {})) {
+      if (typeof text !== 'string' || !text.trim() || !modByFile(k)) continue;
+      if (mine[k] && !overwrite) continue;
+      if (mine[k] !== text) { mine[k] = text; n++; }
+    }
+    if (n) { window.api.saveConfig(config); applyCards(); if (selectedMod) show(selectedMod); }
+    return n;
+  }
+
+  return { show, applyCards, merge, get };
+})();
+
 // ===== After every render =====
 
 function afterRender() {
@@ -4138,6 +4335,8 @@ function afterRender() {
   renderCatNav();
   applyImportMarks();
   applyGhostCards();
+  MARKS.applyCards();
+  MEMO.applyCards();
   updateMissingButton();
   fitDetailWidth();
   if (copyNotice) {

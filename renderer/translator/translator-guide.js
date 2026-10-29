@@ -71,7 +71,16 @@ const GUIDE = (() => {
     ['patch-exclude', '사용자 지정 복사 제외'],
     ['files', '불러오기 · 저장 · 모두 지우기'],
   ];
-  const ex = (rows) => `<table class="gd-table"><tr><th>이렇게 적으면</th><th>뜻</th></tr>${rows.map(([a, b]) => `<tr><td><code>${a}</code></td><td>${b}</td></tr>`).join('')}</table>`;
+  const SECTIONS_EN = [
+    ['basics', 'Read this first'],
+    ['scope', 'Object Type · String ID · source mod'],
+    ['work-fields', 'Your own fields to translate'],
+    ['work-exclude', 'Your own exclusions (translation)'],
+    ['patch-fields', 'Your own fields to copy'],
+    ['patch-exclude', 'Your own exclusions (patch copy)'],
+    ['files', 'Load · Save · Clear all'],
+  ];
+  const ex = (rows) => `<table class="gd-table"><tr><th>${isEn() ? 'Written as' : '이렇게 적으면'}</th><th>${isEn() ? 'Means' : '뜻'}</th></tr>${rows.map(([a, b]) => `<tr><td><code>${a}</code></td><td>${b}</td></tr>`).join('')}</table>`;
   const link = (k, t) => `<a class="gd-go" data-go="${k}">${t}</a>`;
   const BODY = {
     basics: `
@@ -220,6 +229,154 @@ item       charges · item function · production time · quality …</pre>
         <li>칸 위의 체크를 끄면 적어 둔 내용은 남기고 작업에만 쓰지 않습니다.</li>
       </ul>`,
   };
+  // The same guide in English (the window's language: isEn()).
+  const BODY_EN = {
+    basics: `
+      <p>This follows what the FCS (Forgotten Construction Set) shows when you open an entry. The example is the <b>AI Core</b> item.</p>
+      <pre class="gd-shot">Base       Name = AI Core · Object Type = ITEM · String ID = 43392-changes_otto.mod
+files      icon · mesh · physics file · ground mesh …
+General    description = A rare piece of ancient technology… · slot = ATTACH_NONE
+inventory  stackable = 1000 · value = 25000 · weight kg = 1 · inventory sound = Tools …
+item       charges · item function · production time · quality …</pre>
+      <h4>One per line — how to write it</h4>
+      ${ex([
+        ['description', 'A <b>field name</b> alone — that field of every entry'],
+        ['General - description', 'The FCS screen\'s <b>group - field</b> as it is — the group name (General) is ignored and the field is found by its name'],
+        ['ITEM:description', '<b>Object Type:field</b> — in that kind only'],
+        ['ITEM', 'An <b>Object Type</b> alone — the name and every field of that kind'],
+        ['43392-changes_otto.mod', 'A <b>String ID</b> alone — the name and every field of that one entry'],
+        ['43392-changes_otto.mod:description', '<b>String ID:field</b> — only that field of that entry'],
+        ['changes_otto.mod', 'A <b>source mod</b> alone — every entry that mod made'],
+        ['changes_otto.mod:ITEM:name', '<b>source mod:Object Type:field</b> — they can be stacked to narrow it down'],
+      ])}
+      <p>The scopes (Object Type · String ID · source mod) are explained in ${link('scope', 'Object Type · String ID · source mod')}.</p>
+      <ul>
+        <li>Case, spaces and underscores ( _ ) don't matter. <code>Weight KG</code> = <code>weight kg</code> — but an Object Type written <b>alone</b> as a scope is written in <b>capitals</b> (<code>ITEM</code>).</li>
+        <li>Lines starting with <code>#</code> are notes and are ignored. List marks at the start of a line, such as <code>•</code> <code>-</code>, are ignored too.</li>
+        <li>Before <code>:</code> write an Object Type · String ID · source mod, <b>not a group name (General, inventory)</b>. A misspelt Object Type is pointed out when you save ("ITEM?").</li>
+        <li>The record's name (Base's Name) is <code>name</code> or <code>Base - name</code>.</li>
+        <li>When the same thing is in both the fields and the exclusions, <b>the exclusion wins</b>.</li>
+        <li>In an <b>exclusions</b> box, a field name alone (<code>description</code>) or a 'group - field' (<code>General - description</code>) needs <code>field:</code> in front. Without it, it is read as the original text (text:). Lines starting with an Object Type · String ID · source mod, such as <code>ITEM:description</code>, don't need it.</li>
+        <li>When a group name is also an Object Type (the item in <code>item - production time</code>), it narrows the rule to that kind (ITEM).</li>
+      </ul>
+      <h4>Kinds of fields — what works and what doesn't</h4>
+      <table class="gd-table"><tr><th>Kind</th><th>Examples in AI Core</th><th>Fields to translate</th><th>Fields to copy</th></tr>
+        <tr><td>Text</td><td>Name, description, inventory sound</td><td>Yes</td><td>Yes</td></tr>
+        <tr><td>Number · true/false · choice</td><td>stackable, value, weight kg, artifact, has collision, slot, item function, persistent, icon offset …, quality</td><td>Ignored if written</td><td>Yes</td></tr>
+        <tr><td>File path (files group)</td><td>icon, mesh, physics file, ground mesh</td><td>No</td><td>No</td></tr>
+        <tr><td>Scope</td><td>Object Type, String ID</td><td colspan="2">Not fields, but used as <b>scopes</b> — in fields and exclusions alike (${link('scope', 'more')})</td></tr></table>
+      <p class="gd-warn">⚠ Text fields such as inventory sound (value: Tools) are internal names the game uses. Translated, the sound or feature may stop working, so don't translate them. A whole scope in the fields to translate (<code>ITEM</code>, or a String ID alone) translates such fields too.</p>`,
+    scope: `
+      <p>The <b>Object Type</b> and <b>String ID</b> at the top of the FCS screen (the Base group) aren't fields (values), but they are used as scopes: <b>which entries</b> a rule applies to. It works the same in all four boxes: fields to translate · translation exclusions · fields to copy · copy exclusions.</p>
+      <h4>Object Type — the kind of entry</h4>
+      <ul>
+        <li>AI Core's Object Type is <code>ITEM</code>. Others are BUILDING, CHARACTER, WEAPON, ARMOUR, FARM_DATA, DIALOGUE_LINE …</li>
+        <li>Alone, in <b>capitals</b>: <code>ITEM</code> (a lower-case <code>item</code> alone is read as a field name or text). To not mind the case: <code>type:item</code>.</li>
+        <li>With a field: <code>ITEM:description</code>, <code>type:ITEM:description</code> — then lower case works too (<code>item:description</code>).</li>
+        <li>The kind's number works too: <code>4:description</code> (ITEM = 4).</li>
+      </ul>
+      <h4>String ID — one entry</h4>
+      <ul>
+        <li>AI Core's String ID is <code>43392-changes_otto.mod</code> — <b>a number-the mod file that first made the entry</b>.</li>
+        <li>Where to find it: the FCS's String ID field, the <code># [43392-changes_otto.mod]</code> lines of the work log, the String ID column of the review window (copy and paste it as it is).</li>
+        <li>As it is: the entry's name and every field; with <code>:field</code> after it, only that field: <code>43392-changes_otto.mod:description</code></li>
+        <li>A String ID that doesn't end in <code>.mod</code> · <code>.base</code> (e.g. <code>123-player_weapons</code>) gets <code>id:</code> in front: <code>id:123-player_weapons</code>, <code>id:123-player_weapons:name</code></li>
+      </ul>
+      <h4>Source mod — every entry a mod made</h4>
+      <ul>
+        <li>The part of the String ID after <code>-</code>: <code>changes_otto.mod</code> → every entry whose String ID is <code>…-changes_otto.mod</code>.</li>
+        <li>Stacked with a field · Object Type: <code>changes_otto.mod:description</code>, <code>changes_otto.mod:ITEM</code>, <code>changes_otto.mod:ITEM:name</code></li>
+        <li>One that doesn't end in <code>.mod</code> gets <code>mod:</code>: <code>mod:player_weapons:ITEM</code></li>
+        <li>⚠ In a mod that changes another mod's entries, the String IDs point to <b>the original mod</b>. E.g. a mod changing vanilla items has <code>…-rebirth.mod</code> · <code>…-gamedata.base</code>. So "the name of the mod I'm working on" may not catch those entries — check the <code># [ ]</code> lines of the work log.</li>
+        <li>The built-in exclusions in [Translation extraction] (rebirth.mod, gamedata.base, Newwworld.mod, Dialogue.mod) are this source-mod exclusion too.</li>
+      </ul>
+      <h4>A scope alone vs <code>*</code></h4>
+      ${ex([
+        ['ITEM', 'ITEM\'s <b>name and</b> every field'],
+        ['ITEM:*', 'Every field of ITEM (<b>not the name</b>)'],
+        ['43392-changes_otto.mod', 'That entry\'s name and every field'],
+        ['43392-changes_otto.mod:*', 'Every field of that entry (not the name)'],
+      ])}
+      <p>The names of dialogue entries (DIALOGUE · DIALOGUE_LINE · DIALOGUE_PACKAGE) are only used inside the editor, so no rule translates or copies them.</p>
+      <p>When a rule's String ID · source mod isn't in the mod, the work log says "[Note] This mod has no records for the rule's String ID …".</p>`,
+    'work-fields': `
+      <p>Write <b>more text fields to translate</b> besides the built-in ones in [Translation extraction] (name, description, category …). Used by the Korean patch / translate the original / extract.</p>
+      ${ex([
+        ['tooltip', 'The tooltip field of every entry'],
+        ['ITEM:tooltip', 'ITEM\'s tooltip only'],
+        ['General - description', 'The description field (General is ignored)'],
+        ['ITEM:name', 'ITEM\'s names (with the built-in name off, to turn names on by kind)'],
+        ['ITEM', 'ITEM\'s name and every text field — ⚠ internal-name fields such as inventory sound too'],
+        ['ITEM:*', 'Every text field of ITEM (not the name)'],
+        ['43392-changes_otto.mod', 'The name and every text field of the one AI Core entry'],
+        ['43392-changes_otto.mod:description', 'AI Core\'s description only'],
+        ['changes_otto.mod:ITEM:name', 'The names of the ITEMs changes_otto.mod made'],
+      ])}
+      <ul>
+        <li>For 'ITEM:field' where ITEM has no such field but other kinds do, the work drops the kind, looks for the field by its name and says so in the log.</li>
+        <li>To be translated, a text must have letters of a language chosen in [Languages]. Values that are only numbers, or look like file names, aren't translated.</li>
+        <li>How to write scopes: ${link('scope', 'Object Type · String ID · source mod')}</li>
+      </ul>`,
+    'work-exclude': `
+      <p>Write what is <b>not</b> to be translated. Scopes · fields are written as in the fields box, and the original text can be excluded too. With <code>mod:</code> <code>id:</code> <code>type:</code> <code>field:</code> <code>text:</code> <code>contains:</code> in front it means that; without, it is told by its shape.</p>
+      ${ex([
+        ['43392-changes_otto.mod', 'The whole of <b>one entry</b> (a String ID — starting with number- it is read as one)'],
+        ['43392-changes_otto.mod:name', 'That entry\'s name isn\'t translated'],
+        ['changes_otto.mod', 'Every entry the <b>source mod</b> made (ending in .mod / .base it is read as one)'],
+        ['changes_otto.mod:ITEM:description', 'Only the description of the ITEMs that mod made'],
+        ['ITEM', '<b>A whole Object Type</b> (in capitals) · type:item works too'],
+        ['ITEM:description', '<b>A field</b> — ITEM\'s description only'],
+        ['field:General - description', 'A field — every entry\'s description (the same as field:description). ⚠ without field: it is read as text'],
+        ['ITEM:name', 'ITEM\'s names only'],
+        ['text:AI Core', 'Text that is <b>exactly</b> "AI Core" (spaces around it and case ignored)'],
+        ['contains:ancient technology', 'Every text <b>containing</b> this'],
+        ['AI Core = AI 코어', 'A glossary line pasted as it is: the text before \'=\' counts as text:'],
+        ['Hello', 'Text with no mark → the same as text:Hello (a lower-case item becomes text:item too)'],
+      ])}
+      <ul><li>Text with a line break is written with <code>\\n</code>: <code>text:first line\\nsecond line</code></li>
+        <li>How to write scopes: ${link('scope', 'Object Type · String ID · source mod')}</li></ul>`,
+    'patch-fields': `
+      <p>Write <b>more to carry over</b> into [Make a field-copy patch] (_Patch) besides the built-in fields. Nothing is translated: the values are copied as they are, and <b>number · true/false · colour fields work too.</b> With this patch after the original, only those values are replaced.</p>
+      ${ex([
+        ['stackable', 'Stack size (AI Core: 1000) — every entry'],
+        ['inventory - stackable', 'The same (inventory is ignored)'],
+        ['ITEM:stackable', 'ITEM\'s stackable only'],
+        ['value', 'Price (25000)'],
+        ['weight kg', 'Weight'],
+        ['item - production time', 'Production time (the group name item is also an Object Type, so it narrows to ITEM)'],
+        ['ITEM:artifact', 'True/false fields are copied too'],
+        ['FARM_DATA:growth time', 'How long crops take to grow'],
+        ['ITEM', 'ITEM\'s name and every field'],
+        ['ITEM:*', 'Every field of ITEM (not the name)'],
+        ['43392-changes_otto.mod', 'The name and every field of the one AI Core entry'],
+        ['43392-changes_otto.mod:value', 'AI Core\'s price only'],
+        ['changes_otto.mod:ITEM:stackable', 'The stackable of the ITEMs changes_otto.mod made'],
+        ['name', 'The record\'s name'],
+      ])}
+      <ul><li>File paths of the files group and list (reference) fields aren't copied.</li>
+        <li>A rule not found in the mod is reported in the work log, like "[Note] No fields match the rule 'value'. Similar field names: …".</li>
+        <li>How to write scopes: ${link('scope', 'Object Type · String ID · source mod')}</li></ul>`,
+    'patch-exclude': `
+      <p>Write what is <b>not</b> to be carried into the patch. It is written like the translation exclusions.</p>
+      ${ex([
+        ['43392-changes_otto.mod', 'The whole of one entry'],
+        ['43392-changes_otto.mod:value', 'That entry\'s price only'],
+        ['changes_otto.mod', 'Every entry the source mod made'],
+        ['CHARACTER', 'A whole Object Type'],
+        ['ITEM:value', 'ITEM\'s value field only'],
+        ['field:inventory - stackable', 'Every entry\'s stackable (without field: it is read as text)'],
+        ['text:1000', 'Values that are exactly 1000 (an integer field — in a decimal field text:1000.0)'],
+        ['contains:DIALOG', 'Values containing DIALOG'],
+      ])}
+      <ul><li>Numbers are compared as they are stored. Integer fields as 1000, decimal fields with a point like 1000.0, and a value such as 2.3 is stored as 2.299999952316284, which text: can hardly match — leave it out by field (ITEM:icon zoom) or by entry instead.</li></ul>`,
+    files: `
+      <ul>
+        <li><b>Load…</b> — adds a txt file's lines to the box (lines already there are skipped). UTF-8 and CP949 are both read.</li>
+        <li><b>Save…</b> — saves the box as a txt. Default names: <code>translate-fields_date_time.txt</code>, <code>translate-exclusions_…</code>, <code>patch-fields_…</code>, <code>patch-exclusions_…</code> (default place: the data folder)</li>
+        <li><b>Clear all</b> — empties the box. Ctrl+Z brings it back at once, and nothing reaches the settings until [Save] (with [Cancel] it stays as it was).</li>
+        <li>With the tick above a box off, what you wrote stays but the work doesn't use it.</li>
+      </ul>`,
+  };
 
   let layer = null;
   function open(start = 'basics') {
@@ -228,14 +385,16 @@ item       charges · item function · production time · quality …</pre>
       layer.className = 'tr-overlay page gd-layer';
       document.body.appendChild(layer);
     }
+    const sections = isEn() ? SECTIONS_EN : SECTIONS;
+    const bodies = isEn() ? BODY_EN : BODY;
     layer.innerHTML = `<div class="tr-dialog gd-dialog">
-      <div class="gd-wrap"><nav class="gd-nav">${SECTIONS.map(([k, t]) => `<button class="gd-link" data-k="${k}">${t}</button>`).join('')}</nav><div class="gd-body"></div></div>
-      <div class="tr-dialog-foot"><span class="tr-muted" style="font-size:12px">${esc(isEn() ? 'How to write your own fields and exclusions (this guide is in Korean for now)' : '사용자 지정 영역 · 제외를 적는 법')}</span><span class="tr-grow"></span><button class="tr-btn" data-close>${esc(T('common.close'))}</button></div></div>`;
+      <div class="gd-wrap"><nav class="gd-nav">${sections.map(([k, t]) => `<button class="gd-link" data-k="${k}">${t}</button>`).join('')}</nav><div class="gd-body"></div></div>
+      <div class="tr-dialog-foot"><span class="tr-muted" style="font-size:12px">${esc(isEn() ? 'How to write your own fields and exclusions' : '사용자 지정 영역 · 제외를 적는 법')}</span><span class="tr-grow"></span><button class="tr-btn" data-close>${esc(T('common.close'))}</button></div></div>`;
     layer.classList.remove('hidden');
     if (!PAGES.includes(page)) pushPage(page);
     const body = layer.querySelector('.gd-body');
     const show = (k) => {
-      body.innerHTML = `<h3>${SECTIONS.find((x) => x[0] === k)[1]}</h3>` + BODY[k];
+      body.innerHTML = `<h3>${sections.find((x) => x[0] === k)[1]}</h3>` + bodies[k];
       body.scrollTop = 0;
       layer.querySelectorAll('.gd-link').forEach((b) => b.classList.toggle('on', b.dataset.k === k));
       body.querySelectorAll('[data-go]').forEach((a) => a.addEventListener('click', () => show(a.dataset.go)));

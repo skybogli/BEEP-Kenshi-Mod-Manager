@@ -60,7 +60,7 @@ const KMT_BRIDGE = (() => {
   // The translator made (or changed) a mod.
   async function madeMod(info) {
     const name = info.path.split(/[\\/]/).pop();
-    if (info.mode === 'inplace') { setStatus(t('kmt.editedOriginal', { name }), 'success'); return; }
+    if (info.mode === 'inplace') { MARKS.editedHere(info.path); setStatus(t('kmt.editedOriginal', { name }), 'success'); return; }
     if (!info.inMods) { setStatus(t('kmt.madeElsewhere', { name, path: info.path }), 'success'); return; }
     let mod = mods.find((m) => samePath(m.filePath, info.path));
     if (mod && !info.isNew) { setStatus(t('kmt.remade', { name: mod.displayName || name }), 'success'); return; }

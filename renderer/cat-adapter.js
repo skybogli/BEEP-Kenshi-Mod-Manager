@@ -134,6 +134,7 @@ const SB = {
   getKey: 'sb.subscribe',
   toGet: () => toSubscribeFiles(),
   pins: () => [...pins],
+  marks: () => MARKS.chips(), // 🆕 ⟳ 🌐 next to the total (editing.js)
   clip: () => [...clipboardFiles],
   search: () => {
     const q = globalSearchInput.value.trim().toLowerCase();
